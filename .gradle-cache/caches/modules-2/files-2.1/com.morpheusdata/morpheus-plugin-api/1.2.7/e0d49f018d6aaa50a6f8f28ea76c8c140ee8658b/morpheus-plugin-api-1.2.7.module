@@ -1,0 +1,307 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.morpheusdata",
+    "module": "morpheus-plugin-api",
+    "version": "1.2.7",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.12"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 11,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "io.reactivex.rxjava3",
+          "module": "rxjava",
+          "version": {
+            "requires": "3.1.7"
+          }
+        },
+        {
+          "group": "commons-codec",
+          "module": "commons-codec",
+          "version": {
+            "requires": "1.13"
+          }
+        },
+        {
+          "group": "org.apache.httpcomponents",
+          "module": "httpclient",
+          "version": {
+            "requires": "4.5.14"
+          }
+        },
+        {
+          "group": "org.apache.httpcomponents",
+          "module": "httpcore",
+          "version": {
+            "requires": "4.4.15"
+          }
+        },
+        {
+          "group": "org.apache.httpcomponents",
+          "module": "httpmime",
+          "version": {
+            "requires": "4.5.13"
+          }
+        },
+        {
+          "group": "com.github.seancfoley",
+          "module": "ipaddress",
+          "version": {
+            "requires": "5.4.1"
+          }
+        },
+        {
+          "group": "org.slf4j",
+          "module": "slf4j-parent",
+          "version": {
+            "requires": "1.7.26"
+          }
+        },
+        {
+          "group": "com.github.jknack",
+          "module": "handlebars",
+          "version": {
+            "requires": "4.3.1"
+          }
+        },
+        {
+          "group": "org.slf4j",
+          "module": "slf4j-api",
+          "version": {
+            "requires": "1.7.26"
+          }
+        },
+        {
+          "group": "org.bouncycastle",
+          "module": "bcprov-jdk18on",
+          "version": {
+            "requires": "1.78"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "morpheus-plugin-api-1.2.7.jar",
+          "url": "morpheus-plugin-api-1.2.7.jar",
+          "size": 1073473,
+          "sha512": "8db3ffee042442f509357b9c0a7abe1079e74d84d095195649aa9149c8ad8379b2093b40a1d3a30f98e2bf56959d88cb688d6cfe30f53bfa1d246ec894b3ebff",
+          "sha256": "6d9c19c2b184dcd2ca61257f774d0de4827a7cc9ce984fdcbbce156262935a76",
+          "sha1": "a24a3690f6810d7c28af06802d8d44b9df9e59f8",
+          "md5": "8dc262a5baa4829f8ee12fddb435fa9a"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 11,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "javax.servlet",
+          "module": "javax.servlet-api",
+          "version": {
+            "requires": "3.0.1"
+          }
+        },
+        {
+          "group": "org.codehaus.groovy",
+          "module": "groovy",
+          "version": {
+            "requires": "3.0.9"
+          }
+        },
+        {
+          "group": "org.codehaus.groovy",
+          "module": "groovy-json",
+          "version": {
+            "requires": "3.0.9"
+          }
+        },
+        {
+          "group": "org.codehaus.groovy",
+          "module": "groovy-xml",
+          "version": {
+            "requires": "3.0.9"
+          }
+        },
+        {
+          "group": "org.codehaus.groovy",
+          "module": "groovy-console",
+          "version": {
+            "requires": "3.0.9"
+          }
+        },
+        {
+          "group": "commons-net",
+          "module": "commons-net",
+          "version": {
+            "requires": "3.9.0"
+          }
+        },
+        {
+          "group": "com.fasterxml.jackson.core",
+          "module": "jackson-databind",
+          "version": {
+            "requires": "2.15.1"
+          }
+        },
+        {
+          "group": "com.fasterxml.jackson.core",
+          "module": "jackson-annotations",
+          "version": {
+            "requires": "2.15.1"
+          }
+        },
+        {
+          "group": "com.fasterxml.jackson.core",
+          "module": "jackson-core",
+          "version": {
+            "requires": "2.15.1"
+          }
+        },
+        {
+          "group": "io.reactivex.rxjava3",
+          "module": "rxjava",
+          "version": {
+            "requires": "3.1.7"
+          }
+        },
+        {
+          "group": "commons-codec",
+          "module": "commons-codec",
+          "version": {
+            "requires": "1.13"
+          }
+        },
+        {
+          "group": "org.apache.httpcomponents",
+          "module": "httpclient",
+          "version": {
+            "requires": "4.5.14"
+          }
+        },
+        {
+          "group": "org.apache.httpcomponents",
+          "module": "httpcore",
+          "version": {
+            "requires": "4.4.15"
+          }
+        },
+        {
+          "group": "org.apache.httpcomponents",
+          "module": "httpmime",
+          "version": {
+            "requires": "4.5.13"
+          }
+        },
+        {
+          "group": "com.github.seancfoley",
+          "module": "ipaddress",
+          "version": {
+            "requires": "5.4.1"
+          }
+        },
+        {
+          "group": "org.slf4j",
+          "module": "slf4j-parent",
+          "version": {
+            "requires": "1.7.26"
+          }
+        },
+        {
+          "group": "com.github.jknack",
+          "module": "handlebars",
+          "version": {
+            "requires": "4.3.1"
+          }
+        },
+        {
+          "group": "org.slf4j",
+          "module": "slf4j-api",
+          "version": {
+            "requires": "1.7.26"
+          }
+        },
+        {
+          "group": "org.bouncycastle",
+          "module": "bcprov-jdk18on",
+          "version": {
+            "requires": "1.78"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "morpheus-plugin-api-1.2.7.jar",
+          "url": "morpheus-plugin-api-1.2.7.jar",
+          "size": 1073473,
+          "sha512": "8db3ffee042442f509357b9c0a7abe1079e74d84d095195649aa9149c8ad8379b2093b40a1d3a30f98e2bf56959d88cb688d6cfe30f53bfa1d246ec894b3ebff",
+          "sha256": "6d9c19c2b184dcd2ca61257f774d0de4827a7cc9ce984fdcbbce156262935a76",
+          "sha1": "a24a3690f6810d7c28af06802d8d44b9df9e59f8",
+          "md5": "8dc262a5baa4829f8ee12fddb435fa9a"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "morpheus-plugin-api-1.2.7-sources.jar",
+          "url": "morpheus-plugin-api-1.2.7-sources.jar",
+          "size": 1095522,
+          "sha512": "386bee019fed1369f1e061146b8bd35775611cede17f6ffc066d069826a40cbc6843f7275112bf5fbdb483d6d0e30ed4a9f03c98833bfb80ed5cfd75eaa98c02",
+          "sha256": "c6e95289725b225294235145e24046590d22a9cc997dfccdb4265a765a14c922",
+          "sha1": "a52a9867fca5bfd39e6cfa20e51adbb40426df3b",
+          "md5": "ddf8e06d6a0f7b1b4f3a279d492e518c"
+        }
+      ]
+    },
+    {
+      "name": "javadocElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "javadoc",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "morpheus-plugin-api-1.2.7-javadoc.jar",
+          "url": "morpheus-plugin-api-1.2.7-javadoc.jar",
+          "size": 4431768,
+          "sha512": "2ae092bf883d9a337f62d371f1064019650017920e2c1378f5db80b92c30ed4acea08a8d7cd5c92bf63aa85835a25a0946e19c7cc55a91e1201a5dbc61bc23a6",
+          "sha256": "0e59170bc126492544d4ad39a6178be47d6fcf48b588170bb542a1831221fd91",
+          "sha1": "281f04d8c5776e45e88a0f93d471b4a6f560c70c",
+          "md5": "a114ff67a4f165e4fdf10882257242f5"
+        }
+      ]
+    }
+  ]
+}

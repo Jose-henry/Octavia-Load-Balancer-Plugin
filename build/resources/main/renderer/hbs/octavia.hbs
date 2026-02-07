@@ -1,0 +1,9 @@
+<div id="octavia-loadbalancer-view"
+     data-model="{{#if object.network}}network{{else}}instance{{/if}}"
+     data-id="{{#if object.network}}{{object.network.id}}{{else}}{{object.instance.id}}{{/if}}"
+     data-plugin-code="{{pluginCode}}">
+</div>
+{{!-- asset helper adds plugin prefix; include leading slash so path separates correctly --}}
+<script src="{{asset '/octavia-loadbalancer-ui.js'}}"
+        nonce="{{nonce}}"
+        data-csp-host="{{morpheus.applianceUrl}}"></script>

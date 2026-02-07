@@ -1,0 +1,140 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.bertramlabs.plugins",
+    "module": "jsx-asset-pipeline",
+    "version": "3.4.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "6.5",
+      "buildId": "k4zp2nae3va5nlur255gv6kh2m"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 7,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "com.bertramlabs.plugins",
+          "module": "asset-pipeline-core",
+          "version": {
+            "requires": "3.4.0"
+          }
+        },
+        {
+          "group": "org.mozilla",
+          "module": "rhino",
+          "version": {
+            "requires": "1.7R4"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "jsx-asset-pipeline-3.4.0.jar",
+          "url": "jsx-asset-pipeline-3.4.0.jar",
+          "size": 33969,
+          "sha512": "ce6c19b0864330e4070410e45148ed8342208498b6fdd579f5bdd9ae239a7e185fed9695a6dfb32b32db8149d98e61aec0474f7e0aaf41da04a7c99df9aa012c",
+          "sha256": "9041819fb1e9e3bf28d5bc3f5f57f57ffa9df94277c1812f4d3d40abb9d2a755",
+          "sha1": "36dadafacdf8dfeaf5352301958f6b534f22d33e",
+          "md5": "fea0699543ad52e76f60e349950944b2"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 7,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "org.codehaus.groovy",
+          "module": "groovy",
+          "version": {
+            "requires": "2.4.19"
+          }
+        },
+        {
+          "group": "com.bertramlabs.plugins",
+          "module": "asset-pipeline-core",
+          "version": {
+            "requires": "3.4.0"
+          }
+        },
+        {
+          "group": "org.mozilla",
+          "module": "rhino",
+          "version": {
+            "requires": "1.7R4"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "jsx-asset-pipeline-3.4.0.jar",
+          "url": "jsx-asset-pipeline-3.4.0.jar",
+          "size": 33969,
+          "sha512": "ce6c19b0864330e4070410e45148ed8342208498b6fdd579f5bdd9ae239a7e185fed9695a6dfb32b32db8149d98e61aec0474f7e0aaf41da04a7c99df9aa012c",
+          "sha256": "9041819fb1e9e3bf28d5bc3f5f57f57ffa9df94277c1812f4d3d40abb9d2a755",
+          "sha1": "36dadafacdf8dfeaf5352301958f6b534f22d33e",
+          "md5": "fea0699543ad52e76f60e349950944b2"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "jsx-asset-pipeline-3.4.0-sources.jar",
+          "url": "jsx-asset-pipeline-3.4.0-sources.jar",
+          "size": 16353,
+          "sha512": "d78943f4d6ceddae377ad1910a1f856fac4168638d73b53e71b1c838533f13c1cb68a7454b09ffdd855c0fe5e64ac75766841ecc2e4eb705b92c30332ffecf7b",
+          "sha256": "88636d50de65d8c91049a01e7f6da2937b3ada385fc2ff50b6c2ac85c8233c8c",
+          "sha1": "78e78b8e68dbba9aadb5786b77d4509de159f904",
+          "md5": "0c4590441929cf9a1a6092d09a6c252d"
+        }
+      ]
+    },
+    {
+      "name": "javadocElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "javadoc",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "jsx-asset-pipeline-3.4.0-javadoc.jar",
+          "url": "jsx-asset-pipeline-3.4.0-javadoc.jar",
+          "size": 36640,
+          "sha512": "6a978dd8e0c6cdadcd619ba0a079301f62b680d3a22930439c5da08a9d1b2dd0105503a2caeb158576c2474b9fe395677544202de42d482ef376f7c1ba40b600",
+          "sha256": "fbebe53620f148e06bb7c8c1dd12c016469ed6177b5f2bfced415d6d983c089b",
+          "sha1": "15232ddd1ab07738a4586569c5d8a696b33ad95e",
+          "md5": "cfa76c9c7189cbc292c639e2a707515a"
+        }
+      ]
+    }
+  ]
+}

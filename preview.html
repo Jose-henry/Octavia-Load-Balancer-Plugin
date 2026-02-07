@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Octavia Load Balancer UI Preview</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+  <style>
+    body { padding: 20px; }
+    .m-t { margin-top: 15px; }
+    .m-t-lg { margin-top: 30px; }
+    .m-b { margin-bottom: 15px; }
+  </style>
+</head>
+<body>
+  <div id="octavia-loadbalancer-view"></div>
+
+  <!-- React + Babel (dev only for preview) -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+
+  <!-- Load the JSX directly for preview; Babel transpiles in the browser -->
+  <script type="text/babel" data-presets="react" src="src/assets/js/octavia-loadbalancer-ui.jsx"></script>
+
+  <!-- Tiny runtime error banner to help debugging -->
+  <script>
+    window.onerror = function(msg, url, line, col, err) {
+      console.error(msg, url, line, col, err);
+      const banner = document.createElement('div');
+      banner.style.position = 'fixed';
+      banner.style.bottom = '0';
+      banner.style.left = '0';
+      banner.style.right = '0';
+      banner.style.background = '#c0392b';
+      banner.style.color = '#fff';
+      banner.style.padding = '8px 12px';
+      banner.style.zIndex = '99999';
+      banner.textContent = 'JS error: ' + msg;
+      document.body.appendChild(banner);
+    };
+  </script>
+</body>
+</html>

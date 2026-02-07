@@ -1,0 +1,28 @@
+1. https://github.com/HewlettPackard/morpheus-dashboard
+2. https://developer.morpheusdata.com/docs
+3. https://docs.openstack.org/api-ref/load-balancer/v2/index.html?expanded
+4. Example curl command to authenticate via a project and username and password to get the token used for the api;
+    curl -i --insecure -X POST https://keystone.cloud-1.ict.mtn.com.ng:5000/v3/auth/tokens \
+  -H "Content-Type: application/json" \
+  -d '{
+    "auth": {
+      "identity": {
+        "methods": ["password"],
+        "password": {
+          "user": {
+            "name": "cloudadmin",
+            "domain": { "id": "a6e978166e994a488e1d33a3a2a49cf7" },
+            "password": "kaeCaiBool7ootho7ze9"
+          }
+        }
+      },
+      "scope": {
+        "project": {
+          "name": "admin",
+          "domain": { "id": "a6e978166e994a488e1d33a3a2a49cf7" }
+        }
+      }
+    }
+  }'
+
+4. octaviaAPI.pdf

@@ -1,0 +1,100 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.morpheusdata",
+    "module": "morpheus-plugin-gradle",
+    "version": "1.2.7",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "8.12"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 11,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "morpheus-plugin-gradle-1.2.7.jar",
+          "url": "morpheus-plugin-gradle-1.2.7.jar",
+          "size": 30730,
+          "sha512": "2eeb82d8ae161df2c41c8c28720fcfb70c86b07525bce6464e0948eb0c2cfab1be4a7d04db805fb2f8630e83c3d82a73dea44394adbb7daee0e59f6a4106d528",
+          "sha256": "78e6569c3e636876e24b48915464633928b2a3c19491c15717734cf539c78def",
+          "sha1": "ef49b143d948c97b82daba27e3ba08b6aa287d71",
+          "md5": "1a838fcb3d3957b45ba9907b3544318a"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 11,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "morpheus-plugin-gradle-1.2.7.jar",
+          "url": "morpheus-plugin-gradle-1.2.7.jar",
+          "size": 30730,
+          "sha512": "2eeb82d8ae161df2c41c8c28720fcfb70c86b07525bce6464e0948eb0c2cfab1be4a7d04db805fb2f8630e83c3d82a73dea44394adbb7daee0e59f6a4106d528",
+          "sha256": "78e6569c3e636876e24b48915464633928b2a3c19491c15717734cf539c78def",
+          "sha1": "ef49b143d948c97b82daba27e3ba08b6aa287d71",
+          "md5": "1a838fcb3d3957b45ba9907b3544318a"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "morpheus-plugin-gradle-1.2.7-sources.jar",
+          "url": "morpheus-plugin-gradle-1.2.7-sources.jar",
+          "size": 8214,
+          "sha512": "48fbfaa64c4c182f033a14f1882e774df703edb3bd4dd3710af8cf1d73baed223f5b4dc5b870df92af3c4fe79d4e7a74389dbbb6a91a688830540c8269c4a417",
+          "sha256": "dd475ee882e7c11d38169bc31c297dc9cc81450a8687ac013a9440a59db6672f",
+          "sha1": "bb851f442c2002e1e9d7c818f6136bff0d0acca7",
+          "md5": "5fb78786f233c1cacf48eb294c10fa85"
+        }
+      ]
+    },
+    {
+      "name": "javadocElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "javadoc",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "morpheus-plugin-gradle-1.2.7-javadoc.jar",
+          "url": "morpheus-plugin-gradle-1.2.7-javadoc.jar",
+          "size": 261,
+          "sha512": "9d299d6acbc374f5a6fda31368c90e555c1a5d536d1d812f39641b42ca91f80329d358b8d105b1263778a25739fbb51031f812895c17bf5c56a0751db21d81e0",
+          "sha256": "8b1f4a49041706e7f9199d84eb09cc29531446fc31e675cc3a796606927ab911",
+          "sha1": "ceaac1a1e80d8e77c942441c0da7f3b4769df448",
+          "md5": "9082f785b14ea91496cb6f9fa413f43d"
+        }
+      ]
+    }
+  ]
+}

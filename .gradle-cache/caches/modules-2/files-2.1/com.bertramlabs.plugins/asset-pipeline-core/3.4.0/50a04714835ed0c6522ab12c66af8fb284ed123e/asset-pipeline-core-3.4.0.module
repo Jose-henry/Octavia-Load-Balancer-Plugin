@@ -1,0 +1,154 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "com.bertramlabs.plugins",
+    "module": "asset-pipeline-core",
+    "version": "3.4.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "6.5",
+      "buildId": "k4zp2nae3va5nlur255gv6kh2m"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 7,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "dependencies": [
+        {
+          "group": "org.mozilla",
+          "module": "rhino",
+          "version": {
+            "requires": "1.7R4"
+          }
+        },
+        {
+          "group": "org.slf4j",
+          "module": "slf4j-api",
+          "version": {
+            "requires": "1.7.28"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "asset-pipeline-core-3.4.0.jar",
+          "url": "asset-pipeline-core-3.4.0.jar",
+          "size": 706575,
+          "sha512": "d3237d3eb49e87f4568f734eead760167abe2b345cc92bc6fbf06a3ecddbdb14d7b1a3e22cd372356ae89f3c288e7fd4372f5fccfdd57127fdc9ab9d431349c7",
+          "sha256": "cfa0dfb455b2a05c671cecd89e927d77ec46151cb55798674b74fe85c68e2f4e",
+          "sha1": "e5803b440118a13c2ac99a820f00153391a65db6",
+          "md5": "7bd46d3868ae56caac9638f848bb074b"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 7,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "org.codehaus.groovy",
+          "module": "groovy",
+          "version": {
+            "requires": "2.4.19"
+          }
+        },
+        {
+          "group": "org.codehaus.groovy",
+          "module": "groovy-json",
+          "version": {
+            "requires": "2.4.19"
+          }
+        },
+        {
+          "group": "org.codehaus.groovy",
+          "module": "groovy-templates",
+          "version": {
+            "requires": "2.4.19"
+          }
+        },
+        {
+          "group": "org.mozilla",
+          "module": "rhino",
+          "version": {
+            "requires": "1.7R4"
+          }
+        },
+        {
+          "group": "org.slf4j",
+          "module": "slf4j-api",
+          "version": {
+            "requires": "1.7.28"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "asset-pipeline-core-3.4.0.jar",
+          "url": "asset-pipeline-core-3.4.0.jar",
+          "size": 706575,
+          "sha512": "d3237d3eb49e87f4568f734eead760167abe2b345cc92bc6fbf06a3ecddbdb14d7b1a3e22cd372356ae89f3c288e7fd4372f5fccfdd57127fdc9ab9d431349c7",
+          "sha256": "cfa0dfb455b2a05c671cecd89e927d77ec46151cb55798674b74fe85c68e2f4e",
+          "sha1": "e5803b440118a13c2ac99a820f00153391a65db6",
+          "md5": "7bd46d3868ae56caac9638f848bb074b"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "asset-pipeline-core-3.4.0-sources.jar",
+          "url": "asset-pipeline-core-3.4.0-sources.jar",
+          "size": 531696,
+          "sha512": "51c199fefaa154d35627fa8d1befacbc17041447160474081ed6efa66e63f49abb6f2dc190d9558bfa63c0fadc99d5706c96ddb20b0f0eb2e6a1982ec55d8b13",
+          "sha256": "24502dc7321bbb726bfe812cae8bb5165fb9a474f0eb6a7291ede93a89a42f0f",
+          "sha1": "bfd2e7fac068f6a0fef3dae054d688318a56b003",
+          "md5": "ffcc850a10848fd8a964b1c9d8869923"
+        }
+      ]
+    },
+    {
+      "name": "javadocElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "javadoc",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "asset-pipeline-core-3.4.0-javadoc.jar",
+          "url": "asset-pipeline-core-3.4.0-javadoc.jar",
+          "size": 21430,
+          "sha512": "e9a79bf321ef05548573309092bfaea2654e2c1808ac1bb5ffcee31211cb99b7c7b7a5228fb8e482660d6976d6ccdbecbe169d8770d3eb468dd02437ff909710",
+          "sha256": "55260d78d16f5ee7787cc880bbcb6c8889ef7021d60c60a7c33a167c70655f62",
+          "sha1": "ba516d2babd6dc9919d4e0a98e21bf868ae144f5",
+          "md5": "46822e362459f0dee1a9fe92068ccc6a"
+        }
+      ]
+    }
+  ]
+}

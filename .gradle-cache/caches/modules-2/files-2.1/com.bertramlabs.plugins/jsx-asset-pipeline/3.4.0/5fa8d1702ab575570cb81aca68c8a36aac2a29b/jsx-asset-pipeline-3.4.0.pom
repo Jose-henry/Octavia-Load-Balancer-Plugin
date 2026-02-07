@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <!-- This module was also published with a richer model, Gradle metadata,  -->
+  <!-- which should be used instead. Do not delete the following line which  -->
+  <!-- is to indicate to Gradle or any Gradle module metadata file consumer  -->
+  <!-- that they should prefer consuming it instead. -->
+  <!-- do_not_remove: published-with-gradle-metadata -->
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.bertramlabs.plugins</groupId>
+  <artifactId>jsx-asset-pipeline</artifactId>
+  <version>3.4.0</version>
+  <dependencies>
+    <dependency>
+      <groupId>com.bertramlabs.plugins</groupId>
+      <artifactId>asset-pipeline-core</artifactId>
+      <version>3.4.0</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mozilla</groupId>
+      <artifactId>rhino</artifactId>
+      <version>1.7R4</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.codehaus.groovy</groupId>
+      <artifactId>groovy</artifactId>
+      <version>2.4.19</version>
+      <scope>runtime</scope>
+    </dependency>
+  </dependencies>
+  <name>jsx-asset-pipeline</name>
+  <description>JSX Transpiler Extension for the JVM Based Asset-Pipeline.</description>
+  <url>https://github.com/bertramdev/asset-pipeline</url>
+  <scm>
+    <url>https://github.com/bertramdev/asset-pipeline</url>
+    <connection>scm:https://bertramdev@github.com/bertramdev/asset-pipeline.git</connection>
+    <developerConnection>scm:git://github.com/bertramdev/asset-pipeline.git</developerConnection>
+  </scm>
+  <licenses>
+    <license>
+      <name>The Apache Software License, Version 2.0</name>
+      <url>http://www.apache.org/license/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <id>davydotcom</id>
+      <name>David Estes</name>
+      <email>davydotcom@gmail.com</email>
+    </developer>
+  </developers>
+</project>
