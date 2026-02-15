@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Octavia Load Balancer Plugin - Dev Harness</title>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Bootstrap 3 (Morpheus Style Base) -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Open Sans', sans-serif;
+            background-color: #f4f6f8;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .page-content {
+            background: #fff;
+            padding: 20px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        #debug-console {
+            background: #333;
+            color: #fff;
+            padding: 10px;
+            margin-top: 20px;
+            font-family: monospace;
+            display: none;
+        }
+
+        .error-msg {
+            color: #ff5252;
+        }
+    </style>
+    <script>
+        window.onerror = function (msg, url, line, col, error) {
+            var debugInfo = document.getElementById('debug-console');
+            if (debugInfo) {
+                debugInfo.style.display = 'block';
+                debugInfo.innerHTML += '<div class="error-msg">Error: ' + msg + '<br>Line: ' + line + '</div>';
+            }
+            console.error("Global Error:", msg, error);
+        };
+        console.log("Harness loaded");
+    </script>
+</head>
+
+<body>
+
+    <!-- Mount Point with Context Data -->
+    <div id="octavia-loadbalancer-view" data-plugin-code="octavia1234" data-model="network" data-id="100"
+        data-network-name="Production Network" data-resource-pool="Cloud Resource Pool">
+        <div class="alert alert-info">
+            <i class="fa fa-spinner fa-spin"></i> Loading React Application...
+        </div>
+    </div>
+
+    <div id="debug-console">
+        <h4>Debug Console</h4>
+    </div>
+
+    <script>
+        // MOCK window.Morpheus — the JSX file's own mock API (makeApi) handles all API logic.
+        // We only need to provide the Morpheus global that the JSX expects.
+        window.Morpheus = {
+            ui: { defaults: { dateFormat: "YYYY-MM-DD HH:mm:ss" } }
+        };
+    </script>
+
+    <!-- Load React code from external JSX file (served by http-server) -->
+    <script type="text/babel" src="/src/assets/js/octavia-loadbalancer-ui.jsx"></script>
+</body>
+
+</html>

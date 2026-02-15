@@ -1,9 +1,7 @@
-<div id="octavia-loadbalancer-view"
-     data-model="{{#if object.network}}network{{else}}instance{{/if}}"
-     data-id="{{#if object.network}}{{object.network.id}}{{else}}{{object.instance.id}}{{/if}}"
-     data-plugin-code="{{pluginCode}}">
+<div id="octavia-loadbalancer-view" data-plugin-code="{{pluginCode}}"
+     data-model="{{#if network}}network{{else}}instance{{/if}}"
+     data-id="{{#if network}}{{network.id}}{{else}}{{instance.id}}{{/if}}">
+     Loading Octavia Interface...
 </div>
-{{!-- asset helper adds plugin prefix; include leading slash so path separates correctly --}}
-<script src="{{asset '/octavia-loadbalancer-ui.js'}}"
-        nonce="{{nonce}}"
-        data-csp-host="{{morpheus.applianceUrl}}"></script>
+<script src="{{asset '/js/octavia-loadbalancer-ui.js'}}" nonce="{{nonce}}"></script>
+<link rel="stylesheet" href="{{asset '/css/octavia-loadbalancer-ui.css'}}" />
