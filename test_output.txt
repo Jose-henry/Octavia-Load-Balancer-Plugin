@@ -1,0 +1,40 @@
+> Task :compileJava NO-SOURCE
+> Task :compileGroovy UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileTestJava NO-SOURCE
+
+> Task :compileTestGroovy
+startup failed:
+C:\Users\josep\OneDrive\Desktop\projects\Octavia-Load-Balancer-Plugin\src\test\groovy\com\example\octavia\OctaviaApiClientSpec.groovy: 3: unable to resolve class com.morpheusdata.core.util.HttpApiClient
+ @ line 3, column 1.
+   import com.morpheusdata.core.util.HttpApiClient
+   ^
+
+C:\Users\josep\OneDrive\Desktop\projects\Octavia-Load-Balancer-Plugin\src\test\groovy\com\example\octavia\OctaviaApiClientSpec.groovy: 4: unable to resolve class com.morpheusdata.model.Cloud
+ @ line 4, column 1.
+   import com.morpheusdata.model.Cloud
+   ^
+
+C:\Users\josep\OneDrive\Desktop\projects\Octavia-Load-Balancer-Plugin\src\test\groovy\com\example\octavia\OctaviaApiClientSpec.groovy: 7: unable to resolve class com.morpheusdata.response.ServiceResponse
+ @ line 7, column 1.
+   import com.morpheusdata.response.ServiceResponse
+   ^
+
+3 errors
+
+
+> Task :compileTestGroovy FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileTestGroovy'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+BUILD FAILED in 12s
+3 actionable tasks: 1 executed, 2 up-to-date

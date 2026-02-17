@@ -1,0 +1,5 @@
+//# sourceMappingURL=Shared.js.map
+window.Octavia=window.Octavia||{};window.Octavia.Badge=({text:c,tone:a="info"})=>React.createElement("span",{className:`label label-${a}`,style:{marginRight:6,borderRadius:3,padding:"3px 8px",fontSize:"0.8em"}},c);
+window.Octavia.Field=({label:c,children:a,help:b,required:d})=>React.createElement("div",{className:"form-group"},React.createElement("label",{className:"control-label"},c,d?React.createElement("span",{className:"text-danger"}," *"):null),a,b?React.createElement("div",{className:"help-block"},b):null);
+window.Octavia.Toast=({msg:c,type:a,onClose:b})=>{React.useEffect(()=>{const d=setTimeout(b,3E3);return()=>clearTimeout(d)},[b]);return React.createElement("div",{style:{position:"fixed",top:20,right:20,zIndex:9999,backgroundColor:"error"===a?"#f2dede":"#dff0d8",color:"error"===a?"#a94442":"#3c763d",padding:"10px 20px",borderRadius:4,boxShadow:"0 2px 10px rgba(0,0,0,0.2)",display:"flex",alignItems:"center"}},React.createElement("span",{style:{marginRight:10}},c),React.createElement("button",{onClick:b,
+style:{background:"none",border:"none",fontSize:16,cursor:"pointer",color:"inherit"}},"&times;"))};
