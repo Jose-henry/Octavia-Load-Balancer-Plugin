@@ -63,7 +63,7 @@
                         {lbs.map(lb => (
                             <tr key={lb.id} style={{ borderBottom: '1px solid #eee' }}>
                                 <td style={{ padding: '12px', verticalAlign: 'middle', fontWeight: 500, color: '#333' }}>{lb.name}</td>
-                                <td style={{ padding: '12px', verticalAlign: 'middle', color: '#555' }}>{lb.vipAddress}</td>
+                                <td style={{ padding: '12px', verticalAlign: 'middle', color: '#555' }}>{lb.vip_address}</td>
                                 <td style={{ padding: '12px', verticalAlign: 'middle' }}>
                                     <Badge text={lb.provisioning_status} tone={lb.provisioning_status === 'ACTIVE' ? 'success' : 'warning'} />
                                 </td>

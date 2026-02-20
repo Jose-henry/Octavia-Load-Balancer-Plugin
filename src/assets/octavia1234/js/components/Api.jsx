@@ -53,6 +53,8 @@ window.Octavia = window.Octavia || {};
     }
 
     window.Octavia.makeApi = (pluginCode) => {
+        // Routes are flat: /plugin/{pluginCode}/{methodName}
+        // The Dispatcher maps /plugin/... to controller methods by last URL segment
         const baseUrl = `/plugin/${pluginCode}`;
 
         // Helper to append context params
@@ -70,43 +72,75 @@ window.Octavia = window.Octavia || {};
             },
 
             getLoadBalancer: (lbId, ctx) => {
-                return apiFetch(withContext(`${baseUrl}/loadbalancers/details?id=${lbId}`, ctx));
+                return apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx));
             },
 
             createLoadBalancer: (payload) => {
-                return apiFetch(`${baseUrl}/loadbalancers/create`, { method: 'POST', body: JSON.stringify(payload) });
+                return apiFetch(`${baseUrl}/loadbalancersCreate`, { method: 'POST', body: JSON.stringify(payload) });
             },
 
             updateLoadBalancer: (lbId, payload) => {
-                return apiFetch(`${baseUrl}/loadbalancers/update`, { method: 'POST', body: JSON.stringify({ ...payload, id: lbId }) });
+                return apiFetch(`${baseUrl}/loadbalancerUpdate`, { method: 'POST', body: JSON.stringify({ ...payload, id: lbId }) });
             },
 
             deleteLoadBalancer: (lbId, networkId) => {
-                return apiFetch(`${baseUrl}/loadbalancers/delete`, { method: 'POST', body: JSON.stringify({ lbId, networkId }) });
+                return apiFetch(`${baseUrl}/loadbalancersDelete`, { method: 'POST', body: JSON.stringify({ lbId, networkId }) });
             },
 
             listOptions: (networkId, instanceId) => {
-                const types = ['projects', 'subnets', 'instances', 'floatingIpPools'];
                 const ctx = { networkId, instanceId };
-                return Promise.all(types.map(t =>
-                    apiFetch(withContext(`${baseUrl}/options/${t}`, ctx))
-                )).then(results => results.reduce((acc, curr) => ({ ...acc, ...curr }), {}));
+                // Each option type has its own flattened route
+                return Promise.all([
+                    apiFetch(withContext(`${baseUrl}/optionProjects`, ctx)),
+                    apiFetch(withContext(`${baseUrl}/optionSubnets`, ctx)),
+                    apiFetch(withContext(`${baseUrl}/optionInstances`, ctx)),
+                    apiFetch(withContext(`${baseUrl}/optionFloatingIpPools`, ctx))
+                ]).then(results => results.reduce((acc, curr) => ({ ...acc, ...curr }), {}));
             },
 
             // Helpers for Edit Modal
-            listListeners: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancers/details?id=${lbId}`, ctx)).then(r => ({ listeners: r.loadbalancer?.listeners || [] })),
+            listListeners: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx)).then(r => ({ listeners: r.loadbalancer?.listeners || [] })),
 
-            listPools: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancers/details?id=${lbId}`, ctx)).then(r => ({ pools: r.loadbalancer?.pools || [] })),
+            listPools: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx)).then(r => ({ pools: r.loadbalancer?.pools || [] })),
 
-            getHealthMonitor: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancers/details?id=${lbId}`, ctx)).then(r => {
+            getHealthMonitor: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx)).then(r => {
                 const pools = r.loadbalancer?.pools || [];
                 const monitorId = pools.find(p => p.healthmonitor_id)?.healthmonitor_id;
                 return { monitor: monitorId ? { id: monitorId } : null };
             }),
 
-            attachFloatingIp: (lbId, fipPoolId, networkId) => apiFetch(`${baseUrl}/floatingip/attach`, { method: 'POST', body: JSON.stringify({ lbId, floatingIpPoolId, networkId }) }),
+            attachFloatingIp: (lbId, fipPoolId, networkId) => apiFetch(`${baseUrl}/floatingipAttach`, { method: 'POST', body: JSON.stringify({ lbId, floatingIpPoolId: fipPoolId, networkId }) }),
 
-            detachFloatingIp: (lbId, networkId) => apiFetch(`${baseUrl}/floatingip/detach`, { method: 'POST', body: JSON.stringify({ lbId, networkId }) })
+            detachFloatingIp: (lbId, networkId) => apiFetch(`${baseUrl}/floatingipDetach`, { method: 'POST', body: JSON.stringify({ lbId, networkId }) }),
+
+            /**
+             * Poll LB status until provisioning_status is ACTIVE or ERROR.
+             */
+            pollStatus: (lbId, ctx, intervalMs = 3000, maxAttempts = 40) => {
+                return new Promise((resolve, reject) => {
+                    let attempts = 0;
+                    const check = () => {
+                        attempts++;
+                        apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx))
+                            .then(r => {
+                                const lb = r.data || r.loadbalancer || r;
+                                const status = lb.provisioning_status;
+                                if (status === 'ACTIVE' || status === 'ERROR' || status === 'DELETED') {
+                                    resolve(lb);
+                                } else if (attempts >= maxAttempts) {
+                                    reject(new Error('Status polling timed out'));
+                                } else {
+                                    setTimeout(check, intervalMs);
+                                }
+                            })
+                            .catch(err => {
+                                if (attempts >= maxAttempts) reject(err);
+                                else setTimeout(check, intervalMs);
+                            });
+                    };
+                    check();
+                });
+            }
         };
     };
 

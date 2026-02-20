@@ -1,44 +1,35 @@
 package com.example.backend
 
-import com.example.CustomOctaviaLoadBalancerUiPlugin
-import com.example.octavia.service.OctaviaLoadBalancerService
-import com.example.octavia.service.OctaviaNetworkingService
-import com.example.octavia.service.OctaviaPoolService
 import com.morpheusdata.core.MorpheusContext
-import com.morpheusdata.model.Cloud
+import com.morpheusdata.core.Plugin
 import com.morpheusdata.model.Permission
 import com.morpheusdata.web.PluginController
 import com.morpheusdata.web.Route
 import com.morpheusdata.views.JsonResponse
-import groovy.json.JsonSlurper
+import com.morpheusdata.views.ViewModel
 import groovy.util.logging.Slf4j
 
 /**
- * REST API for Octavia UI.
- * Refactored to use generic OctaviaLoadBalancerService and OctaviaNetworkingService.
+ * Minimal Octavia controller — stripped of all non-essential dependencies
+ * to isolate the 404 routing issue.
+ *
+ * Following the exact pattern from Morpheus docs:
+ *   Route.build(url, methodName, permission) where methodName = the method to call on this controller.
+ *   Handler methods receive ViewModel<Map> and return JsonResponse.
  */
 @Slf4j
 class OctaviaController implements PluginController {
 
-    final CustomOctaviaLoadBalancerUiPlugin plugin
-    final MorpheusContext morpheus
-    final MorpheusLookupService lookupService
-    
-    // New Services
-    final OctaviaLoadBalancerService lbService
-    final OctaviaNetworkingService netService
-    final OctaviaPoolService poolService
+    Plugin plugin
+    MorpheusContext morpheusContext
 
-    OctaviaController(CustomOctaviaLoadBalancerUiPlugin plugin, MorpheusContext morpheus) {
+    OctaviaController(Plugin plugin, MorpheusContext morpheusContext) {
         this.plugin = plugin
-        this.morpheus = morpheus
-        this.lookupService = new MorpheusLookupService(morpheus)
-        
-        this.lbService = new OctaviaLoadBalancerService(morpheus)
-        this.netService = new OctaviaNetworkingService(morpheus)
-        this.poolService = new OctaviaPoolService(morpheus)
+        this.morpheusContext = morpheusContext
+        log.info("OctaviaController instantiated successfully. Plugin code: {}", plugin?.getCode())
     }
 
+    // ── PluginProvider required methods ──────────────────────────
     @Override
     String getCode() { 'octavia-controller' }
 
@@ -46,253 +37,91 @@ class OctaviaController implements PluginController {
     String getName() { 'Octavia Controller' }
 
     @Override
+    MorpheusContext getMorpheus() { morpheusContext }
+
+    @Override
+    Plugin getPlugin() { plugin }
+
+    // ── Routes ──────────────────────────────────────────────────
+    @Override
     List<Route> getRoutes() {
-        def readPerm = Permission.build('network', 'read')
-        def writePerm = Permission.build('network', 'full')
-        // Using empty permissions list for read-only routes to ensure access (authenticated users only)
+        log.info("OctaviaController.getRoutes() called")
         [
-            Route.build("/plugin/${plugin.code}/loadbalancers", 'loadbalancers', []), 
-            Route.build("/plugin/${plugin.code}/loadbalancers/create", 'loadbalancersCreate', writePerm),
-            Route.build("/plugin/${plugin.code}/loadbalancers/delete", 'loadbalancersDelete', writePerm),
-            Route.build("/plugin/${plugin.code}/loadbalancers/details", 'loadbalancerDetails', []),
-            Route.build("/plugin/${plugin.code}/loadbalancers/update", 'loadbalancerUpdate', writePerm),
-            Route.build("/plugin/${plugin.code}/floatingip/attach", 'floatingipAttach', writePerm),
-            Route.build("/plugin/${plugin.code}/floatingip/detach", 'floatingipDetach', writePerm),
-            Route.build("/plugin/${plugin.code}/options/:type", 'options', [])
+            Route.build("/plugin/octavia1234/loadbalancers",          "loadbalancers",         Permission.build("network", "read")),
+            Route.build("/plugin/octavia1234/loadbalancersCreate",    "loadbalancersCreate",   Permission.build("network", "full")),
+            Route.build("/plugin/octavia1234/loadbalancersDelete",    "loadbalancersDelete",   Permission.build("network", "full")),
+            Route.build("/plugin/octavia1234/loadbalancerDetails",    "loadbalancerDetails",   Permission.build("network", "read")),
+            Route.build("/plugin/octavia1234/loadbalancerUpdate",     "loadbalancerUpdate",    Permission.build("network", "full")),
+            Route.build("/plugin/octavia1234/floatingipAttach",       "floatingipAttach",      Permission.build("network", "full")),
+            Route.build("/plugin/octavia1234/floatingipDetach",       "floatingipDetach",      Permission.build("network", "full")),
+            Route.build("/plugin/octavia1234/optionProjects",         "optionProjects",        Permission.build("network", "read")),
+            Route.build("/plugin/octavia1234/optionSubnets",          "optionSubnets",         Permission.build("network", "read")),
+            Route.build("/plugin/octavia1234/optionInstances",        "optionInstances",       Permission.build("network", "read")),
+            Route.build("/plugin/octavia1234/optionFloatingIpPools",  "optionFloatingIpPools", Permission.build("network", "read"))
         ]
     }
 
-    // --- route handlers ----------------------------------------------------
+    // ── Handlers — all return static mock JSON for now ────────────
 
-    Object loadbalancers(Object request, Object response) {
-        def params = extractParams(request)
-        def ctx = getContext(params)
-        if (!ctx) return JsonResponse.of([loadbalancers: []])
-
-        try {
-            def cloud = getCloud(ctx)
-            def projectId = getProjectId(ctx)
-            if (!cloud || !projectId) return badRequest("Cloud or Project context missing")
-
-            def result = lbService.list(cloud, projectId)
-            if (result.success) {
-                return JsonResponse.of([loadbalancers: result.data ?: []])
-            } else {
-                return JsonResponse.of([loadbalancers: [], error: result.msg])
-            }
-        } catch (Exception ex) {
-            log.error("List Error: ${ex.message}", ex)
-            return JsonResponse.of([loadbalancers: [], error: ex.message])
-        }
+    def loadbalancers(ViewModel<Map> model) {
+        log.info("loadbalancers() handler called")
+        return JsonResponse.of([
+            loadbalancers: [
+                [id: 'lb-mock-1', name: 'Mock LB 1', provisioning_status: 'ACTIVE', operating_status: 'ONLINE',
+                 vip_address: '10.0.0.1', provider: 'octavia', listeners: [], pools: []],
+                [id: 'lb-mock-2', name: 'Mock LB 2', provisioning_status: 'ACTIVE', operating_status: 'ONLINE',
+                 vip_address: '10.0.0.2', provider: 'octavia', listeners: [], pools: []]
+            ]
+        ])
     }
 
-    Object loadbalancersCreate(Object request, Object response) {
-        def body = extractJson(request)
-        def ctx = getContext([networkId: body.networkId])
-        if (!ctx) return badRequest("Context required")
-
-        try {
-            def cloud = getCloud(ctx)
-            def projectId = getProjectId(ctx)
-            
-            def result = lbService.create(cloud, projectId, body)
-            return toJson(result)
-        } catch (Exception ex) {
-            return JsonResponse.of([success:false, error: ex.message])
-        }
+    def loadbalancersCreate(ViewModel<Map> model) {
+        log.info("loadbalancersCreate() handler called")
+        return JsonResponse.of([success: true, data: [id: 'lb-new-1', name: 'New Mock LB', provisioning_status: 'ACTIVE']])
     }
 
-    Object loadbalancersDelete(Object request, Object response) {
-        def body = extractJson(request)
-        def ctx = getContext([networkId: body.networkId])
-        if (!ctx) return badRequest("Context required")
-
-        try {
-            def cloud = getCloud(ctx)
-            def projectId = getProjectId(ctx)
-            
-            def result = lbService.delete(cloud, projectId, body.lbId as String)
-            return toJson(result)
-        } catch (Exception ex) {
-             return JsonResponse.of([success:false, error: ex.message])
-        }
+    def loadbalancersDelete(ViewModel<Map> model) {
+        log.info("loadbalancersDelete() handler called")
+        return JsonResponse.of([success: true])
     }
 
-    Object loadbalancerDetails(Object request, Object response) {
-        def params = extractParams(request)
-        if (!params.id) return badRequest("id is required")
-        def ctx = getContext(params)
-        if (!ctx) return badRequest("Context required")
-
-        try {
-            def result = lbService.get(getCloud(ctx), getProjectId(ctx), params.id)
-            return toJson(result)
-        } catch (Exception ex) {
-            return JsonResponse.of([success:false, error: ex.message])
-        }
+    def loadbalancerDetails(ViewModel<Map> model) {
+        log.info("loadbalancerDetails() handler called")
+        return JsonResponse.of([success: true, data: [id: 'lb-mock-1', name: 'Mock LB 1', provisioning_status: 'ACTIVE']])
     }
 
-    Object loadbalancerUpdate(Object request, Object response) {
-        def body = extractJson(request)
-        def params = extractParams(request) // check query for networkId too
-        
-        // Merge params
-        Long netId = params.networkId ? params.networkId as Long : (body.networkId as Long)
-        def ctx = getContext([networkId: netId])
-        if (!ctx) return badRequest("Context required")
-
-        try {
-            def result = lbService.update(getCloud(ctx), getProjectId(ctx), body.id, body)
-            return toJson(result)
-        } catch (Exception ex) {
-             return JsonResponse.of([success:false, error: ex.message])
-        }
+    def loadbalancerUpdate(ViewModel<Map> model) {
+        log.info("loadbalancerUpdate() handler called")
+        return JsonResponse.of([success: true])
     }
 
-    Object floatingipAttach(Object request, Object response) {
-        def body = extractJson(request)
-        def ctx = getContext([networkId: body.networkId])
-        if (!ctx) return badRequest("Context required")
-        
-        try {
-            def result = netService.associateFloatingIp(getCloud(ctx), getProjectId(ctx), body.floatingIpPoolId, body.lbVipPortId) 
-            // Note: UI sends floatingIpPoolId as the ID of the FIP usually, or we search. 
-            // Wait, previous logic was: find free FIP in pool, then associate.
-            // Let's re-read the body.floatingIpPoolId meaning.
-            // If body.floatingIpPoolId is actually the NETWORK ID of the floating network, we need to find free.
-            
-            // Re-implement finding free logic logic here or in service?
-            // Let's assume UI sends the FIP ID if selected, or Pool ID.
-            // Current UI likely sends Pool ID.
-            
-            // Logic: 
-            // 1. Get LB to find VIP Port -> done in service? NO, netService.associate takes FIP ID and Port ID.
-            // We need to resolve these.
-            
-            // Let's stick to simple service calls. 
-            // We might need to fetch LB details first to get VIP Port.
-            def lb = lbService.get(getCloud(ctx), getProjectId(ctx), body.lbId).data
-            String vipPortId = lb?.vip_port_id
-            
-            // Find FIP in the pool (network)
-            def fipsResp = netService.listFloatingIps(getCloud(ctx), getProjectId(ctx), [floating_network_id: body.floatingIpPoolId, status: 'DOWN'])
-            def freeFip = fipsResp.data?.find { it.port_id == null }
-            
-            // If no free fip, create one? OctaviaApiService created one.
-            // We need createFloatingIp in NetService.
-            // ... omitting creation for brevity unless requested, but better to be safe.
-            // Assuming we just fail if none available for now, or use existing free.
-            
-            if (freeFip) {
-                 def update = netService.associateFloatingIp(getCloud(ctx), getProjectId(ctx), freeFip.id, vipPortId)
-                 return toJson(update)
-            } else {
-                 return badRequest("No free Floating IP available in pool")
-            }
-        } catch (Exception ex) {
-             return JsonResponse.of([success:false, error: ex.message])
-        }
+    def floatingipAttach(ViewModel<Map> model) {
+        log.info("floatingipAttach() handler called")
+        return JsonResponse.of([success: true])
     }
 
-    Object floatingipDetach(Object request, Object response) {
-         def body = extractJson(request)
-         def ctx = getContext([networkId: body.networkId])
-         
-         try {
-             def lb = lbService.get(getCloud(ctx), getProjectId(ctx), body.lbId).data
-             String vipPortId = lb?.vip_port_id
-             
-             // Find FIP attached to this port
-             def fips = netService.listFloatingIps(getCloud(ctx), getProjectId(ctx), [port_id: vipPortId]).data
-             
-             if (fips) {
-                 fips.each { fip ->
-                     netService.disassociateFloatingIp(getCloud(ctx), getProjectId(ctx), fip.id)
-                 }
-                 return JsonResponse.of([success:true])
-             } else {
-                 return JsonResponse.of([success:true, msg:"No FIP attached"])
-             }
-         } catch (Exception ex) {
-             return JsonResponse.of([success:false, error: ex.message])
-         }
+    def floatingipDetach(ViewModel<Map> model) {
+        log.info("floatingipDetach() handler called")
+        return JsonResponse.of([success: true])
     }
 
-    Object options(Object request, Object response) {
-        def params = extractParams(request)
-        def ctx = getContext(params)
-        String type = params.type
-        Long networkId = params.networkId ? params.networkId as Long : null
-        
-        // ... (Keep existing options logic mostly, using LookupService) ...
-        // For brevity, using lookupService directly as before
-        switch (type) {
-            case 'projects':
-                return JsonResponse.of([projects: projects(ctx)])
-            case 'subnets':
-                 return JsonResponse.of([subnets: subnets(ctx)])
-            case 'instances':
-                return JsonResponse.of([instances: lookupService.listInstancesOnNetwork(networkId)])
-            case 'floatingIpPools':
-                return JsonResponse.of([floatingIpPools: lookupService.listFloatingIpPools(networkId)])
-            default:
-                return JsonResponse.of([error: "Unknown option type $type"])
-        }
+    def optionProjects(ViewModel<Map> model) {
+        log.info("optionProjects() handler called")
+        return JsonResponse.of([projects: [[name: 'Mock Project', value: 'mock-project']]])
     }
 
-    // --- Helpers ---
-    
-    private Map getContext(Map params) {
-        Long networkId = params.networkId ? params.networkId as Long : null
-        Long instanceId = params.instanceId ? params.instanceId as Long : null
-        
-        if (networkId) return lookupService.getNetworkContext(networkId)
-        if (instanceId) return lookupService.getInstanceContext(instanceId)
-        return null
+    def optionSubnets(ViewModel<Map> model) {
+        log.info("optionSubnets() handler called")
+        return JsonResponse.of([subnets: [[name: 'mock-subnet', value: 'subnet-mock', cidr: '192.168.1.0/24']]])
     }
 
-    private Cloud getCloud(Map ctx) {
-        ctx.cloud ?: ctx.network?.cloud
+    def optionInstances(ViewModel<Map> model) {
+        log.info("optionInstances() handler called")
+        return JsonResponse.of([instances: [[name: 'mock-instance-1', value: 'inst-001']]])
     }
 
-    private String getProjectId(Map ctx) {
-        ctx.project?.id ?: ctx.network?.project?.id
-    }
-
-    private JsonResponse toJson(def serviceResponse) {
-        if (serviceResponse.success) {
-            return JsonResponse.of(serviceResponse.toMap()) // ServiceResponse has toMap? No, usually generic.
-            // Morpheus ServiceResponse doesn't always have toMap.
-            // Manually map:
-            // return JsonResponse.of([success:true, data: serviceResponse.data])
-        }
-        return JsonResponse.of([success: serviceResponse.success, msg: serviceResponse.msg, error: serviceResponse.error, data: serviceResponse.data])
-    }
-    
-    // ... (Keep extractParams, extractJson, projects, subnets, badRequest from original) ...
-    private Map extractParams(Object request) {
-        try { return request?.params ?: [:] } catch (ignored) { [:] }
-    }
-    private Map extractJson(Object request) {
-        try {
-            def raw = request?.JSON
-            if (raw instanceof Map) return raw
-            def txt = request?.inputStream?.text
-            if (txt) return (Map)new JsonSlurper().parseText(txt)
-        } catch (ignored) { }
-        return [:]
-    }
-    private JsonResponse badRequest(String msg) { JsonResponse.of([success: false, error: msg], 400) }
-    private List projects(Map ctx) {
-        def project = ctx.project
-        if (project) return [[name: project.name ?: 'Project', value: project.id?.toString()]]
-        return [[name: 'Demo Project', value: 'demo']]
-    }
-    private List subnets(Map ctx) {
-        def net = ctx.network
-        if (net?.subnets) {
-            return net.subnets.collect { [name: it?.name ?: it?.cidr ?: 'subnet', value: it?.id?.toString(), cidr: it?.cidr] }
-        }
-        return [[name: 'demo-subnet', value: 'subnet-demo', cidr: '192.0.2.0/24']]
+    def optionFloatingIpPools(ViewModel<Map> model) {
+        log.info("optionFloatingIpPools() handler called")
+        return JsonResponse.of([floatingIpPools: [[name: 'ext-net', value: 'ext-net-1']]])
     }
 }

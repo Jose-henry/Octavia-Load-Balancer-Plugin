@@ -32,9 +32,8 @@
             setLoading(true);
             window.Octavia.api.createLoadBalancer(data)
                 .then(() => {
-                    const { Toast } = window.Octavia;
-                    // Trigger toast if available, or just reload
-                    window.location.reload();
+                    setLoading(false);
+                    onCreated();
                 })
                 .catch(e => {
                     setLoading(false);

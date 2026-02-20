@@ -98,7 +98,7 @@
                                   React.createElement(
                                     "td",
                                     null,
-                                    lb.vipAddress
+                                    lb.vip_address
                                   ),
                                   React.createElement(
                                     "td",

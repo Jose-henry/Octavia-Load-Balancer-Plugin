@@ -129,7 +129,7 @@
                               React.createElement(
                                 "td",
                                 {style: { padding: '12px', verticalAlign: 'middle', color: '#555' }},
-                                lb.vipAddress
+                                lb.vip_address
                               ),
                               React.createElement(
                                 "td",

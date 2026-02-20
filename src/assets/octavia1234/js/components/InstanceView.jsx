@@ -27,7 +27,7 @@
                                             {lb.name}
                                         </a>
                                     </td>
-                                    <td>{lb.vipAddress}</td>
+                                    <td>{lb.vip_address}</td>
                                     <td><Badge text={lb.provisioning_status || 'ACTIVE'} tone={(lb.provisioning_status || 'ACTIVE') === 'ACTIVE' ? 'success' : 'warning'} /></td>
                                     <td>{(lb.members || []).length}</td>
                                     <td>

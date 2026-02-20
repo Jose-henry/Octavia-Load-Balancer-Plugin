@@ -43,9 +43,16 @@ class CustomOctaviaLoadBalancerUiPlugin extends Plugin {
         def optionSource = new OctaviaOptionSourceProvider(this, morpheus)
         this.pluginProviders.put(optionSource.code, optionSource)
 
-        // Register controller
-        def controller = new OctaviaController(this, morpheus)
-        this.controllers.add(controller)
+        // Register controller — wrapped in try-catch to diagnose silent failures
+        try {
+            log.info("About to create OctaviaController...")
+            def controller = new OctaviaController(this, morpheus)
+            log.info("OctaviaController created, adding to controllers list...")
+            this.controllers.add(controller)
+            log.info("OctaviaController registered successfully. Routes: {}", controller.getRoutes()*.url)
+        } catch (Exception ex) {
+            log.error("FAILED to register OctaviaController: ${ex.class.name}: ${ex.message}", ex)
+        }
 
         this.name = "Custom Octavia Load Balancer UI"
     }
