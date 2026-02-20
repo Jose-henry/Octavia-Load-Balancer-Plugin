@@ -25,7 +25,7 @@ class OctaviaInstanceTabProvider extends AbstractInstanceTabProvider {
     MorpheusContext getMorpheus() { morpheus }
 
     @Override
-    String getCode() { 'octavia-instance-tab' }
+    String getCode() { 'load-balancer-instance-tab' }
 
     @Override
     String getName() {

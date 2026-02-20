@@ -177,51 +177,35 @@
                    validationMsg
                  ),
                     React.createElement(
-                      "ul",
-                      {className: "nav nav-pills nav-justified", style: { marginBottom: 20 }},
+                      "div",
+                      {className: "wizard", style: { marginBottom: 20 }},
                       React.createElement(
-                        "li",
-                        {className: step === 1 ? 'active' : ''},
+                        "ul",
+                        {className: "breadcrumbs"},
                         React.createElement(
-                          "a",
-                          {onClick: () => handleTabClick(1)},
-                          "1. Details"
-                        )
-                      ),
-                      React.createElement(
-                        "li",
-                        {className: step === 2 ? 'active' : ''},
+                          "li",
+                          {className: step === 1 ? 'bc active' : 'bc', onClick: () => handleTabClick(1), style: { cursor: 'pointer' }},
+                          "Details"
+                        ),
                         React.createElement(
-                          "a",
-                          {onClick: () => handleTabClick(2)},
-                          "2. Listener"
-                        )
-                      ),
-                      React.createElement(
-                        "li",
-                        {className: step === 3 ? 'active' : ''},
+                          "li",
+                          {className: step === 2 ? 'bc active' : 'bc', onClick: () => handleTabClick(2), style: { cursor: 'pointer' }},
+                          "Listener"
+                        ),
                         React.createElement(
-                          "a",
-                          {onClick: () => handleTabClick(3)},
-                          "3. Pool"
-                        )
-                      ),
-                      React.createElement(
-                        "li",
-                        {className: step === 4 ? 'active' : ''},
+                          "li",
+                          {className: step === 3 ? 'bc active' : 'bc', onClick: () => handleTabClick(3), style: { cursor: 'pointer' }},
+                          "Pool"
+                        ),
                         React.createElement(
-                          "a",
-                          {onClick: () => handleTabClick(4)},
-                          "4. Members"
-                        )
-                      ),
-                      React.createElement(
-                        "li",
-                        {className: step === 5 ? 'active' : ''},
+                          "li",
+                          {className: step === 4 ? 'bc active' : 'bc', onClick: () => handleTabClick(4), style: { cursor: 'pointer' }},
+                          "Members"
+                        ),
                         React.createElement(
-                          "a",
-                          {onClick: () => handleTabClick(5)},
-                          "5. Monitor"
+                          "li",
+                          {className: step === 5 ? 'bc active' : 'bc', onClick: () => handleTabClick(5), style: { cursor: 'pointer' }},
+                          "Monitor"
                         )
                       )
                     ),

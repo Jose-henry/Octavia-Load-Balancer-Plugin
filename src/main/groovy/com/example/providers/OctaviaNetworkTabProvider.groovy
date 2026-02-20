@@ -25,7 +25,7 @@ class OctaviaNetworkTabProvider extends AbstractNetworkTabProvider {
     MorpheusContext getMorpheus() { morpheus }
 
     @Override
-    String getCode() { 'octavia-network-tab' }
+    String getCode() { 'load-balancer-network-tab' }
 
     @Override
     String getName() {

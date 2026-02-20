@@ -88,10 +88,36 @@ class OctaviaController implements PluginController {
         return routes
     }
 
-    /** Minimal diagnostic endpoint */
+    /** Diagnostic endpoint displaying context resolution details */
     def ping(ViewModel<Map> model) {
-        log.info(">>> PING HANDLER REACHED! <<<")
-        return JsonResponse.of([success: true, message: 'Octavia plugin is alive', timestamp: System.currentTimeMillis()])
+        log.info("ping() handler called")
+        try {
+            def ctx = resolveContext(model)
+            def networkIdStr = getParam(model, 'networkId')
+            def instanceIdStr = getParam(model, 'instanceId')
+            
+            def info = [
+                status: 'ok',
+                mockMode: isMockMode(),
+                networkIdParam: networkIdStr,
+                instanceIdParam: instanceIdStr,
+                resolvedContext: [
+                    hasNetwork: ctx?.network != null,
+                    networkId: ctx?.network?.id,
+                    networkName: ctx?.network?.name,
+                    hasProject: ctx?.project != null,
+                    projectId: ctx?.project?.id,
+                    projectName: ctx?.project?.name,
+                    hasCloud: ctx?.cloud != null,
+                    cloudId: ctx?.cloud?.id,
+                    cloudName: ctx?.cloud?.name
+                ]
+            ]
+            return JsonResponse.of(info)
+        } catch (Exception ex) {
+            log.error("ping() failed: {}", ex.message, ex)
+            return JsonResponse.of([status: 'error', message: ex.message])
+        }
     }
 
     // ── Helpers ─────────────────────────────────────────────────
@@ -120,7 +146,11 @@ class OctaviaController implements PluginController {
     /** Get query parameter from ViewModel */
     private String getParam(ViewModel<Map> model, String name) {
         try {
-            return model.object?.request?.getParameter(name)
+            def val = model.object?.get(name)
+            if (val != null) return val.toString()
+            def reqVal = model.object?.request?.getParameter(name)
+            log.debug("getParam('{}') resolved to '{}' from model.object.request", name, reqVal)
+            return reqVal
         } catch (Exception ex) {
             log.debug("Could not get param {}: {}", name, ex.message)
             return null
@@ -131,17 +161,25 @@ class OctaviaController implements PluginController {
     private Map resolveContext(ViewModel<Map> model) {
         def networkIdStr = getParam(model, 'networkId')
         def instanceIdStr = getParam(model, 'instanceId')
+        log.info("resolveContext -> networkId: [{}], instanceId: [{}]", networkIdStr, instanceIdStr)
+        
         Map ctx = [:]
         try {
             if (networkIdStr) {
-                ctx = lookupService.getNetworkContext(Long.parseLong(networkIdStr))
+                def id = Long.parseLong(networkIdStr)
+                ctx = lookupService.getNetworkContext(id)
+                log.info("resolveContext -> Resolved network context for id {}: {}", id, !!ctx?.network)
                 ctx.networkId = networkIdStr
             } else if (instanceIdStr) {
-                ctx = lookupService.getInstanceContext(Long.parseLong(instanceIdStr))
+                def id = Long.parseLong(instanceIdStr)
+                ctx = lookupService.getInstanceContext(id)
+                log.info("resolveContext -> Resolved instance context for id {}: {}", id, !!ctx?.instance)
                 ctx.instanceId = instanceIdStr
+            } else {
+                log.warn("resolveContext -> No networkId or instanceId provided")
             }
         } catch (Exception ex) {
-            log.warn("resolveContext failed: {}", ex.message)
+            log.warn("resolveContext failed: {}", ex.message, ex)
         }
         return ctx
     }
@@ -367,19 +405,28 @@ class OctaviaController implements PluginController {
             def ctx = resolveContext(model)
             def network = ctx.network
             if (network) {
-                // For OpenStack, subnets are related to the network
-                // Use the network's subnet information if available
                 def subnets = []
-                if (network.subnets) {
+                log.info("Fetching subnets for network ID: ${network.id}")
+                
+                // Fetch using Morpheus Network Subnet Service identity projections
+                def subnetProjections = lookupService.morpheus.async.networkSubnet.listIdentityProjections(network).toList().blockingGet()
+                if (subnetProjections) {
+                    subnets = subnetProjections.collect { sub ->
+                        [name: "${sub.name ?: sub.externalId} (${sub.cidr ?: 'n/a'})", value: sub.externalId ?: sub.id?.toString(), cidr: sub.cidr]
+                    }
+                } else if (network.subnets) {
+                    // Fallback to directly fetching network.subnets if projection is empty
                     subnets = network.subnets.collect { sub ->
                         [name: "${sub.name ?: sub.externalId} (${sub.cidr ?: 'n/a'})", value: sub.externalId ?: sub.id?.toString(), cidr: sub.cidr]
                     }
                 } else if (network.externalId) {
-                    // Fallback: return the network itself as a subnet option
+                    // Fallback to the network itself if absolutely no subnets are registered
                     subnets = [[name: network.name ?: 'Network', value: network.externalId, cidr: network.cidr]]
                 }
+                
                 return JsonResponse.of([data: subnets])
             }
+            log.warn("network was null in ctx in optionSubnets()")
             return JsonResponse.of([data: []])
         } catch (Exception ex) {
             log.error("optionSubnets() failed: {}", ex.message, ex)
@@ -391,18 +438,18 @@ class OctaviaController implements PluginController {
         log.info("optionInstances() handler called")
         try {
             if (isMockMode()) {
-                return JsonResponse.of([instances: [[name: 'mock-instance-1', value: 'inst-001'], [name: 'mock-instance-2', value: 'inst-002']]])
+                return JsonResponse.of([data: [[name: 'mock-instance-1', value: 'inst-001'], [name: 'mock-instance-2', value: 'inst-002']]])
             }
 
-            def networkIdStr = getParam(model, 'networkId')
-            if (networkIdStr) {
-                def instances = lookupService.listInstancesOnNetwork(Long.parseLong(networkIdStr))
-                return JsonResponse.of([instances: instances])
+            def ctx = resolveContext(model)
+            if (ctx && (ctx.network || ctx.project)) {
+                def instances = lookupService.listInstances(ctx)
+                return JsonResponse.of([data: instances])
             }
-            return JsonResponse.of([instances: []])
+            return JsonResponse.of([data: []])
         } catch (Exception ex) {
             log.error("optionInstances() failed: {}", ex.message, ex)
-            return JsonResponse.of([instances: []])
+            return JsonResponse.of([data: []])
         }
     }
 

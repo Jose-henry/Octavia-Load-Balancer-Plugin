@@ -2,32 +2,38 @@
 
 /* Spinner animation for loading states */
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* Modal overlay backdrop */
 .modal.fade.in {
     background-color: rgba(0, 0, 0, 0.55);
 }
+
 .modal-backdrop.fade.in {
     opacity: 0.5;
 }
 
-/* Table enhancements */
-.table > thead > tr > th {
-    text-transform: uppercase;
-    font-size: 0.85em;
-    font-weight: 600;
-    color: #666;
+.octavia-plugin .table>thead>tr>th {
+    font-size: 12px;
+    font-weight: 500;
+    color: #777;
     border-bottom: 2px solid #e0e0e0;
     padding: 10px 12px;
 }
-.table > tbody > tr > td {
+
+.octavia-plugin .table>tbody>tr>td {
     vertical-align: middle;
     padding: 10px 12px;
 }
-.table-hover > tbody > tr:hover {
+
+.octavia-plugin .table-hover>tbody>tr:hover {
     background-color: rgba(45, 108, 162, 0.06);
 }
 
@@ -41,11 +47,31 @@
     text-transform: uppercase;
     letter-spacing: 0.03em;
 }
-.octavia-badge-success { background: #e8f5e9; color: #2e7d32; }
-.octavia-badge-warning { background: #fff3e0; color: #e65100; }
-.octavia-badge-danger  { background: #fce4ec; color: #c62828; }
-.octavia-badge-info    { background: #e3f2fd; color: #1565c0; }
-.octavia-badge-default { background: #f5f5f5; color: #616161; }
+
+.octavia-badge-success {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.octavia-badge-warning {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.octavia-badge-danger {
+    background: #fce4ec;
+    color: #c62828;
+}
+
+.octavia-badge-info {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.octavia-badge-default {
+    background: #f5f5f5;
+    color: #616161;
+}
 
 /* Action button styles */
 .octavia-action-btn {
@@ -60,27 +86,31 @@
     cursor: pointer;
     transition: all 0.15s ease;
 }
+
 .octavia-action-btn:hover {
     background: #f5f5f5;
     border-color: #bdbdbd;
 }
+
 .octavia-action-btn img {
     width: 14px;
     height: 14px;
     opacity: 0.7;
 }
+
 .octavia-action-btn:hover img {
     opacity: 1;
 }
 
 /* Wizard step navigation */
-.nav-pills.nav-justified > li > a {
+.nav-pills.nav-justified>li>a {
     border-radius: 0;
     border-bottom: 2px solid transparent;
     color: #888;
     font-weight: 500;
 }
-.nav-pills.nav-justified > li.active > a {
+
+.nav-pills.nav-justified>li.active>a {
     background: transparent;
     border-bottom-color: #2d6ca2;
     color: #2d6ca2;
@@ -92,6 +122,7 @@
     padding: 60px 20px;
     color: #999;
 }
+
 .octavia-empty-state svg,
 .octavia-empty-state i {
     font-size: 3em;
@@ -109,6 +140,7 @@
 .form-horizontal .form-control {
     border-radius: 3px;
 }
+
 .form-horizontal .form-control:focus {
     border-color: #2d6ca2;
     box-shadow: 0 0 0 2px rgba(45, 108, 162, 0.15);
@@ -121,4 +153,17 @@
     border: 1px solid #eee;
     border-radius: 4px;
     box-shadow: none;
+}
+
+/* Fix side-by-side gap for form columns */
+.form-horizontal .row {
+    margin-left: -15px;
+    margin-right: -15px;
+}
+
+.form-horizontal .col-md-6,
+.form-horizontal .col-md-3,
+.form-horizontal .col-sm-12 {
+    padding-left: 15px;
+    padding-right: 15px;
 }

@@ -27,13 +27,13 @@ class MorpheusLookupService {
      */
     Map getNetworkContext(Long networkId) {
         try {
-            Network net = morpheus.network.getNetworkById(networkId)?.blockingGet()
+            Network net = morpheus.async.network.get(networkId)?.blockingGet()
             def cloud = null
             if (net?.refType == 'ComputeZone' && net?.refId) {
-                cloud = morpheus.cloud.getCloudById(net.refId)?.blockingGet()
+                cloud = morpheus.async.cloud.getCloudById(net.refId)?.blockingGet()
             }
-            def project = net?.project
-            return [network: net, cloud: cloud, project: project]
+            // Explicit project property doesn't exist on Network
+            return [network: net, cloud: cloud, project: null]
         } catch (Exception ex) {
             log.warn("getNetworkContext failed for networkId={}: {}", networkId, ex.message)
             return [:]
@@ -41,17 +41,22 @@ class MorpheusLookupService {
     }
 
     /**
-     * Instances whose interfaces are attached to the given network.
+     * Instances whose interfaces are attached to the given network or belonging to the account.
+     * The user explicitly requested that members be a list of ALL members in the current tenancy, 
+     * not only scoped to the network we are currently creating the loadbalancer.
      */
-    List<Map> listInstancesOnNetwork(Long networkId) {
+    List<Map> listInstances(Map ctx) {
         try {
-            def query = new DataQuery().withFilter(new DataFilter("interfaces.network.id", networkId))
-            def items = morpheus.instance.list(query).toList().blockingGet()
-            return items.collect { Instance inst ->
-                [name: inst.name, value: inst.id?.toString()]
+            def account = ctx?.network?.account ?: ctx?.project?.account
+            if (!account) return []
+            
+            def query = new DataQuery().withFilter(new DataFilter("account.id", account.id))
+            def items = morpheus.instance.listIdentityProjections(query).toList().blockingGet()
+            return items.collect { inst ->
+                [name: inst.name ?: "Instance ${inst.id}", value: inst.id?.toString()]
             }
         } catch (Exception ex) {
-            log.warn("listInstancesOnNetwork failed: {}", ex.message)
+            log.warn("listInstances failed: {}", ex.message)
             return []
         }
     }
@@ -61,13 +66,14 @@ class MorpheusLookupService {
      */
     List<Map> listFloatingIpPools(Long networkId) {
         try {
-            Network net = morpheus.network.getNetworkById(networkId)?.blockingGet()
+            Network net = morpheus.async.network.get(networkId)?.blockingGet()
             def cloud = null
             if (net?.refType == 'ComputeZone' && net?.refId) {
-                cloud = morpheus.cloud.getCloudById(net.refId)?.blockingGet()
+                cloud = morpheus.async.cloud.getCloudById(net.refId)?.blockingGet()
             }
             if (!cloud) return []
-            def pools = morpheus.network.listFloatingIpPools(cloud)?.toList()?.blockingGet() ?: []
+            // Async network -> floatingIp -> pool
+            def pools = morpheus.async.network.floatingIp.pool.list(new DataQuery().withFilter("cloud.id", cloud.id))?.toList()?.blockingGet() ?: []
             return pools.collect { [name: it?.name ?: "Pool ${it?.id}", value: it?.id?.toString()] }
         } catch (Exception ex) {
             log.warn("listFloatingIpPools failed: {}", ex.message)
@@ -79,7 +85,7 @@ class MorpheusLookupService {
      */
     Map getInstanceContext(Long instanceId) {
         try {
-            Instance inst = morpheus.instance.get(instanceId).blockingGet()
+            Instance inst = morpheus.async.instance.find(new DataQuery().withFilter("id", instanceId))?.blockingGet()
             if (!inst) return [:]
 
             // Resolve Cloud (Site/Zone)
@@ -128,7 +134,8 @@ class MorpheusLookupService {
                 }
              } catch (e) { log.debug("Could not resolve network from instance: ${e}") }
 
-            return [instance: inst, cloud: instCloud, project: inst.project, network: network]
+            // Explicit project property doesn't exist on Instance
+            return [instance: inst, cloud: instCloud, project: null, network: network]
         } catch (Exception ex) {
             log.warn("getInstanceContext failed for instanceId={}: {}", instanceId, ex.message)
             return [:]

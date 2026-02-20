@@ -48,9 +48,9 @@ const App = () => {
 
   const networkId = model === 'network' ? id : null
   const instanceId = model === 'instance' ? id : null
-  if (networkId) return <NetworkView networkId={networkId} />
-  if (instanceId) return <InstanceView instanceId={instanceId} />
-  return <div className="alert alert-warning">Context missing.</div>
+  if (networkId) return <div className="octavia-plugin"><NetworkView networkId={networkId} /></div>
+  if (instanceId) return <div className="octavia-plugin"><InstanceView instanceId={instanceId} /></div>
+  return <div className="alert alert-warning octavia-plugin">Context missing.</div>
 }
 
 
