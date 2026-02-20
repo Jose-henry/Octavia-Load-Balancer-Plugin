@@ -28,8 +28,9 @@ class OctaviaInstanceTabProvider extends AbstractInstanceTabProvider {
     String getCode() { 'octavia-instance-tab' }
 
     @Override
-    String getName() { 'Octavia' }
-
+    String getName() {
+        return "Load Balancers" // Removed 'Octavia' per user request
+    }
     @Override
     HTMLResponse renderTemplate(Instance instance) {
         def model = new ViewModel(object: [instance: instance, pluginCode: plugin.code])

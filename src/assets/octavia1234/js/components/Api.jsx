@@ -73,6 +73,11 @@ window.Octavia = window.Octavia || {};
         // The PluginController integrates directly with the Morpheus UI session via /plugin/{code}/...
 
         return {
+            getSubnets: (networkId) => {
+                if (!networkId) return Promise.resolve({ data: [] });
+                return apiFetch(`${baseUrl}/optionSubnets?networkId=${networkId}`, { method: 'GET' });
+            },
+
             listLoadBalancers: (ctx) => {
                 return apiFetch(withContext(`${baseUrl}/loadbalancers`, ctx));
             },

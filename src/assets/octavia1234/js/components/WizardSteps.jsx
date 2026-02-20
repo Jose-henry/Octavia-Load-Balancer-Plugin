@@ -283,7 +283,7 @@
                                             <td>{m.port}</td>
                                             <td>{m.weight}</td>
                                             <td><Badge text={m.type || 'INTERNAL'} tone={m.type === 'EXTERNAL' ? 'warning' : 'info'} /></td>
-                                            <td className="text-right"><button className="btn btn-xs" style={{ backgroundColor: '#b00020', color: '#fff', border: 'none', fontWeight: 600 }} onClick={() => removeMember(m.id)}>&times;</button></td>
+                                            <td className="text-right"><button className="btn btn-xs" style={{ backgroundColor: '#b00020', color: '#fff', border: 'none', padding: '3px 8px' }} onClick={() => removeMember(m.id)}><i className="fa fa-trash"></i></button></td>
                                         </tr>
                                     ))}
                             </tbody>

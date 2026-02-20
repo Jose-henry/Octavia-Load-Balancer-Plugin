@@ -12,6 +12,19 @@
 
         const [deleteTarget, setDeleteTarget] = React.useState(null);
         const [deleting, setDeleting] = React.useState(false);
+        const [subnets, setSubnets] = React.useState([]);
+
+        const showWizard = view === 'create';
+
+        // Fetch subnets when wizard is opened
+        React.useEffect(() => {
+            if (showWizard) {
+                Api.getSubnets(networkId).then(res => {
+                    const mapped = (res?.data || []).map(s => ({ name: s.name, value: s.value, cidr: s.cidr }));
+                    setSubnets(mapped);
+                }).catch(e => console.error("Error fetching subnets:", e));
+            }
+        }, [showWizard, networkId]);
 
         if (lbState.error) return React.createElement(
                                     "div",
@@ -60,7 +73,7 @@
                 ),
               view === 'create' && React.createElement(
                        CreateWizardComp,
-                       {networkId: networkId, options: options, onClose: () => setView('list'), onCreated: () => { setView('list'); setToast({ msg: 'Load Balancer created.', type: 'success' }); }}
+                       {networkId: networkId, options: { ...options, subnets }, onClose: () => setView('list'), onCreated: () => { setView('list'); setToast({ msg: 'Load Balancer created.', type: 'success' }); }}
                      ),
               view === 'edit' && selectedLb && React.createElement(
                                    EditLBModalComp,
@@ -71,46 +84,42 @@
                 {style: { display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 15, padding: '0 5px' }},
                 React.createElement(
                   "button",
-                  {className: "btn", style: { backgroundColor: '#f9c600', color: '#000', border: 'none', fontWeight: 600, textTransform: 'uppercase', padding: '6px 14px', fontSize: '0.85em' }, onClick: () => setView('create')},
-                  React.createElement(
-                    "i",
-                    {className: "fa fa-plus", style: { marginRight: 5 }}
-                  ),
-                  " Add"
+                  {className: "btn btn-primary", onClick: () => setView('create')},
+                  "+ ADD"
                 )
               ),
               React.createElement(
                 "table",
-                {className: "table", style: { borderCollapse: 'collapse' }},
+                {className: "table table-striped table-hover"},
                 React.createElement(
                   "thead",
                   null,
                   React.createElement(
                     "tr",
-                    {style: { borderBottom: '2px solid #e1e3e5' }},
+                    null,
                     React.createElement(
                       "th",
-                      {style: { textTransform: 'uppercase', fontSize: '0.8em', fontWeight: 600, color: '#555', letterSpacing: '0.5px', padding: '10px 12px' }},
+                      null,
                       "Name"
                     ),
                     React.createElement(
                       "th",
-                      {style: { textTransform: 'uppercase', fontSize: '0.8em', fontWeight: 600, color: '#555', letterSpacing: '0.5px', padding: '10px 12px' }},
+                      null,
                       "VIP"
                     ),
                     React.createElement(
                       "th",
-                      {style: { textTransform: 'uppercase', fontSize: '0.8em', fontWeight: 600, color: '#555', letterSpacing: '0.5px', padding: '10px 12px' }},
+                      null,
                       "Status"
                     ),
                     React.createElement(
                       "th",
-                      {style: { textTransform: 'uppercase', fontSize: '0.8em', fontWeight: 600, color: '#555', letterSpacing: '0.5px', padding: '10px 12px' }},
+                      null,
                       "Members"
                     ),
                     React.createElement(
                       "th",
-                      {style: { textTransform: 'uppercase', fontSize: '0.8em', fontWeight: 600, color: '#555', letterSpacing: '0.5px', padding: '10px 12px', width: 80 }}
+                      null
                     )
                   )
                 ),
@@ -120,20 +129,20 @@
                   lbs.map(lb => (
                             React.createElement(
                               "tr",
-                              {key: lb.id, style: { borderBottom: '1px solid #eee' }},
+                              {key: lb.id},
                               React.createElement(
                                 "td",
-                                {style: { padding: '12px', verticalAlign: 'middle', fontWeight: 500, color: '#333' }},
+                                null,
                                 lb.name
                               ),
                               React.createElement(
                                 "td",
-                                {style: { padding: '12px', verticalAlign: 'middle', color: '#555' }},
+                                null,
                                 lb.vip_address
                               ),
                               React.createElement(
                                 "td",
-                                {style: { padding: '12px', verticalAlign: 'middle' }},
+                                null,
                                 React.createElement(
                                   Badge,
                                   {text: lb.provisioning_status, tone: lb.provisioning_status === 'ACTIVE' ? 'success' : 'warning'}
@@ -141,38 +150,44 @@
                               ),
                               React.createElement(
                                 "td",
-                                {style: { padding: '12px', verticalAlign: 'middle', color: '#555' }},
+                                null,
                                 (lb.members || []).length
                               ),
                               React.createElement(
                                 "td",
-                                {style: { padding: '12px', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }},
+                                {style: { textAlign: 'right', whiteSpace: 'nowrap' }},
                                 React.createElement(
                                   "button",
-                                  {className: "btn btn-link btn-sm", style: { marginRight: 6, padding: '3px 8px' }, title: "Edit", onClick: () => { setSelectedLb(lb); setView('edit'); }},
+                                  {className: "btn btn-link btn-sm", title: "Edit", onClick: () => { setSelectedLb(lb); setView('edit'); }},
                                   React.createElement(
-                                    "img",
-                                    {src: "/assets/octavia1234/images/pencil.svg", style: { width: 14, height: 14 }, alt: "Edit"}
+                                    "i",
+                                    {className: "fa fa-pencil", style: { fontSize: '1.2em' }}
                                   )
                                 ),
                                 React.createElement(
                                   "button",
-                                  {className: "btn btn-link btn-sm", style: { padding: '3px 8px' }, title: "Delete", onClick: () => setDeleteTarget(lb)},
+                                  {className: "btn btn-link btn-sm", title: "Delete", onClick: () => setDeleteTarget(lb)},
                                   React.createElement(
-                                    "img",
-                                    {src: "/assets/octavia1234/images/trash.svg", style: { width: 14, height: 14 }, alt: "Delete"}
+                                    "i",
+                                    {className: "fa fa-trash", style: { fontSize: '1.2em' }}
                                   )
                                 )
                               )
                             )
-                        ))
+                        )),
+                  lbs.length === 0 && (
+                            React.createElement(
+                              "tr",
+                              null,
+                              React.createElement(
+                                "td",
+                                {colSpan: "5", style: { textAlign: 'center', padding: 40, color: '#999' }},
+                                "No Load Balancers found. Click \"ADD\" to create one."
+                              )
+                            )
+                        )
                 )
-              ),
-              lbs.length === 0 && React.createElement(
-                      "div",
-                      {style: { textAlign: 'center', padding: '30px 0', color: '#999' }},
-                      "No Load Balancers found. Click \"+ Add\" to create one."
-                    )
+              )
             )
         );
     };

@@ -28,7 +28,9 @@ class OctaviaNetworkTabProvider extends AbstractNetworkTabProvider {
     String getCode() { 'octavia-network-tab' }
 
     @Override
-    String getName() { 'Octavia' }
+    String getName() {
+        return "Load Balancers" // Removed 'Octavia'
+    }
 
     @Override
     HTMLResponse renderTemplate(Network network) {

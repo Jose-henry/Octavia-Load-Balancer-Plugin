@@ -8,7 +8,7 @@
         if (lbState.error) return <div className="alert alert-danger">{lbState.error.message}</div>
         if (lbState.loading) return <div style={{ padding: 20, textAlign: 'center' }}><span style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #ccc', borderTopColor: '#333', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}></span> Loading...</div>
         const lbs = lbState.data?.loadbalancers || []
-        if (lbs.length === 0) return <div className="alert alert-info">This instance is not a member of any Octavia load balancer.</div>
+        if (lbs.length === 0) return <div className="alert alert-info">This instance is not a member of any Load Balancers.</div>
 
         return (
             <div className="container-fluid" style={{ padding: '0 12px' }}>

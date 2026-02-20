@@ -136,6 +136,11 @@ window.Octavia = window.Octavia || {};
         // The PluginController integrates directly with the Morpheus UI session via /plugin/{code}/...
 
         return {
+            getSubnets: (networkId) => {
+                if (!networkId) return Promise.resolve({ data: [] });
+                return apiFetch(`${baseUrl}/optionSubnets?networkId=${networkId}`, { method: 'GET' });
+            },
+
             listLoadBalancers: (ctx) => {
                 return apiFetch(withContext(`${baseUrl}/loadbalancers`, ctx));
             },
@@ -977,8 +982,11 @@ window.Octavia = window.Octavia || {};
                                             {className: "text-right"},
                                             React.createElement(
                                               "button",
-                                              {className: "btn btn-xs", style: { backgroundColor: '#b00020', color: '#fff', border: 'none', fontWeight: 600 }, onClick: () => removeMember(m.id)},
-                                              "&times;"
+                                              {className: "btn btn-xs", style: { backgroundColor: '#b00020', color: '#fff', border: 'none', padding: '3px 8px' }, onClick: () => removeMember(m.id)},
+                                              React.createElement(
+                                                "i",
+                                                {className: "fa fa-trash"}
+                                              )
                                             )
                                           )
                                         )
@@ -1191,10 +1199,22 @@ const DeleteConfirmModal = ({ lb, onClose, onConfirm, loading }) => (
             {className: "modal-header"},
             React.createElement(
               "button",
-              {type: "button", className: "close", onClick: onClose},
+              {type: "button", className: "close", onClick: onClose, "data-dismiss": "modal", "aria-label": "Close"},
               React.createElement(
-                "img",
-                {src: "/assets/octavia1234/images/times.svg", style: { width: 12, height: 12 }, alt: "Close"}
+                "span",
+                {"aria-hidden": "true"},
+                React.createElement(
+                  "svg",
+                  {version: "1.1", className: "close-icon", xmlns: "http://www.w3.org/2000/svg", xmlnsXlink: "http://www.w3.org/1999/xlink", x: "0px", y: "0px", viewBox: "0 0 59.9 59.9", enableBackground: "new 0 0 59.9 59.9", xmlSpace: "preserve"},
+                  React.createElement(
+                    "line",
+                    {fill: "none", stroke: "currentColor", strokeMiterlimit: "10", x1: "57.4", y1: "2.5", x2: "2.5", y2: "57.4"}
+                  ),
+                  React.createElement(
+                    "line",
+                    {fill: "none", stroke: "currentColor", strokeMiterlimit: "10", x1: "2.5", y1: "2.5", x2: "57.4", y2: "57.4"}
+                  )
+                )
               )
             ),
             React.createElement(
@@ -1293,7 +1313,65 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
             }
         }, [options]);
 
+        const validateStep = (s) => {
+            if (s === 1) {
+                if (!data.name || !data.name.trim()) return "Name is required.";
+                if (!data.vipSubnetId) return "VIP Subnet is required.";
+            }
+            if (s === 2 && data.createListener) {
+                if (!data.listenerName || !data.listenerName.trim()) return "Listener Name is required.";
+                if (!data.listenerProtocol) return "Listener Protocol is required.";
+                if (!data.listenerPort) return "Listener Port is required.";
+            }
+            if (s === 3 && data.createPool) {
+                if (!data.poolName || !data.poolName.trim()) return "Pool Name is required.";
+                if (data.sessionPersistence === 'APP_COOKIE' && (!data.cookieName || !data.cookieName.trim())) return "Cookie Name is required.";
+            }
+            if (s === 5 && data.createMonitor) {
+                if (!data.monitorName || !data.monitorName.trim()) return "Monitor Name is required.";
+                if (!data.monitorType) return "Monitor Type is required.";
+                if (!data.delay) return "Delay is required.";
+                if (!data.timeout) return "Timeout is required.";
+                if (!data.maxRetries) return "Max Retries is required.";
+            }
+            return null;
+        };
+
+        const handleNext = () => {
+            const err = validateStep(step);
+            if (err) {
+                setValidationMsg(err);
+                return;
+            }
+            setValidationMsg('');
+            setStep(step + 1);
+        };
+
+        const handlePrevious = () => {
+            setValidationMsg('');
+            setStep(step - 1);
+        };
+
+        const handleTabClick = (targetStep) => {
+            if (targetStep > step) {
+                // If trying to jump forward, validate current step first
+                const err = validateStep(step);
+                if (err) {
+                    setValidationMsg(err);
+                    return;
+                }
+            }
+            setValidationMsg('');
+            setStep(targetStep);
+        };
+
         const submit = () => {
+            const err = validateStep(5);
+            if (err) {
+                setValidationMsg(err);
+                return;
+            }
+            setValidationMsg('');
             setLoading(true);
             window.Octavia.api.createLoadBalancer(data)
                 .then(() => {
@@ -1302,7 +1380,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                 })
                 .catch(e => {
                     setLoading(false);
-                    alert('Error: ' + e.message);
+                    setValidationMsg('Error: ' + e.message);
                 });
         };
 
@@ -1339,7 +1417,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
         return (
             React.createElement(
               "div",
-              {className: "modal fade in", style: { display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }},
+              {className: "modal fade in", style: { display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', overflowY: 'auto' }},
               React.createElement(
                 "div",
                 {className: "modal-dialog modal-lg"},
@@ -1351,18 +1429,38 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                     {className: "modal-header"},
                     React.createElement(
                       "button",
-                      {type: "button", className: "close", onClick: onClose},
-                      "&times;"
+                      {type: "button", className: "close", "data-dismiss": "modal", "aria-label": "Close", onClick: onClose},
+                      React.createElement(
+                        "span",
+                        {"aria-hidden": "true"},
+                        React.createElement(
+                          "svg",
+                          {version: "1.1", className: "close-icon", xmlns: "http://www.w3.org/2000/svg", xmlnsXlink: "http://www.w3.org/1999/xlink", x: "0px", y: "0px", viewBox: "0 0 59.9 59.9", enableBackground: "new 0 0 59.9 59.9", xmlSpace: "preserve"},
+                          React.createElement(
+                            "line",
+                            {fill: "none", stroke: "currentColor", strokeMiterlimit: "10", x1: "57.4", y1: "2.5", x2: "2.5", y2: "57.4"}
+                          ),
+                          React.createElement(
+                            "line",
+                            {fill: "none", stroke: "currentColor", strokeMiterlimit: "10", x1: "2.5", y1: "2.5", x2: "57.4", y2: "57.4"}
+                          )
+                        )
+                      )
                     ),
                     React.createElement(
                       "h4",
                       {className: "modal-title"},
-                      "Create Load Balancer (Octavia)"
+                      "Create Load Balancer"
                     )
                   ),
                   React.createElement(
                     "div",
                     {className: "modal-body"},
+                    validationMsg && React.createElement(
+                   "div",
+                   {className: "alert alert-danger", style: { padding: '10px 15px', marginBottom: 20 }},
+                   validationMsg
+                 ),
                     React.createElement(
                       "ul",
                       {className: "nav nav-pills nav-justified", style: { marginBottom: 20 }},
@@ -1371,7 +1469,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                         {className: step === 1 ? 'active' : ''},
                         React.createElement(
                           "a",
-                          {onClick: () => setStep(1)},
+                          {onClick: () => handleTabClick(1)},
                           "1. Details"
                         )
                       ),
@@ -1380,7 +1478,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                         {className: step === 2 ? 'active' : ''},
                         React.createElement(
                           "a",
-                          {onClick: () => setStep(2)},
+                          {onClick: () => handleTabClick(2)},
                           "2. Listener"
                         )
                       ),
@@ -1389,7 +1487,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                         {className: step === 3 ? 'active' : ''},
                         React.createElement(
                           "a",
-                          {onClick: () => setStep(3)},
+                          {onClick: () => handleTabClick(3)},
                           "3. Pool"
                         )
                       ),
@@ -1398,7 +1496,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                         {className: step === 4 ? 'active' : ''},
                         React.createElement(
                           "a",
-                          {onClick: () => setStep(4)},
+                          {onClick: () => handleTabClick(4)},
                           "4. Members"
                         )
                       ),
@@ -1407,7 +1505,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                         {className: step === 5 ? 'active' : ''},
                         React.createElement(
                           "a",
-                          {onClick: () => setStep(5)},
+                          {onClick: () => handleTabClick(5)},
                           "5. Monitor"
                         )
                       )
@@ -1424,12 +1522,12 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                     ),
                     step > 1 && React.createElement(
               "button",
-              {className: "btn btn-default", onClick: () => setStep(step - 1)},
+              {className: "btn btn-default", onClick: handlePrevious},
               "Previous"
             ),
                     step < 5 && React.createElement(
               "button",
-              {className: "btn btn-primary", onClick: () => setStep(step + 1)},
+              {className: "btn btn-primary", onClick: handleNext},
               "Next"
             ),
                     step === 5 && React.createElement(
@@ -1550,10 +1648,22 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                     {className: "modal-header"},
                     React.createElement(
                       "button",
-                      {type: "button", className: "close", onClick: onClose},
+                      {type: "button", className: "close", onClick: onClose, "data-dismiss": "modal", "aria-label": "Close"},
                       React.createElement(
-                        "img",
-                        {src: "/assets/octavia1234/images/times.svg", style: { width: 14, height: 14 }, alt: "Close"}
+                        "span",
+                        {"aria-hidden": "true"},
+                        React.createElement(
+                          "svg",
+                          {version: "1.1", className: "close-icon", xmlns: "http://www.w3.org/2000/svg", xmlnsXlink: "http://www.w3.org/1999/xlink", x: "0px", y: "0px", viewBox: "0 0 59.9 59.9", enableBackground: "new 0 0 59.9 59.9", xmlSpace: "preserve"},
+                          React.createElement(
+                            "line",
+                            {fill: "none", stroke: "currentColor", strokeMiterlimit: "10", x1: "57.4", y1: "2.5", x2: "2.5", y2: "57.4"}
+                          ),
+                          React.createElement(
+                            "line",
+                            {fill: "none", stroke: "currentColor", strokeMiterlimit: "10", x1: "2.5", y1: "2.5", x2: "57.4", y2: "57.4"}
+                          )
+                        )
                       )
                     ),
                     React.createElement(
@@ -1712,6 +1822,19 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
 
         const [deleteTarget, setDeleteTarget] = React.useState(null);
         const [deleting, setDeleting] = React.useState(false);
+        const [subnets, setSubnets] = React.useState([]);
+
+        const showWizard = view === 'create';
+
+        // Fetch subnets when wizard is opened
+        React.useEffect(() => {
+            if (showWizard) {
+                Api.getSubnets(networkId).then(res => {
+                    const mapped = (res?.data || []).map(s => ({ name: s.name, value: s.value, cidr: s.cidr }));
+                    setSubnets(mapped);
+                }).catch(e => console.error("Error fetching subnets:", e));
+            }
+        }, [showWizard, networkId]);
 
         if (lbState.error) return React.createElement(
                                     "div",
@@ -1760,7 +1883,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                 ),
               view === 'create' && React.createElement(
                        CreateWizardComp,
-                       {networkId: networkId, options: options, onClose: () => setView('list'), onCreated: () => { setView('list'); setToast({ msg: 'Load Balancer created.', type: 'success' }); }}
+                       {networkId: networkId, options: { ...options, subnets }, onClose: () => setView('list'), onCreated: () => { setView('list'); setToast({ msg: 'Load Balancer created.', type: 'success' }); }}
                      ),
               view === 'edit' && selectedLb && React.createElement(
                                    EditLBModalComp,
@@ -1771,46 +1894,42 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                 {style: { display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 15, padding: '0 5px' }},
                 React.createElement(
                   "button",
-                  {className: "btn", style: { backgroundColor: '#f9c600', color: '#000', border: 'none', fontWeight: 600, textTransform: 'uppercase', padding: '6px 14px', fontSize: '0.85em' }, onClick: () => setView('create')},
-                  React.createElement(
-                    "i",
-                    {className: "fa fa-plus", style: { marginRight: 5 }}
-                  ),
-                  " Add"
+                  {className: "btn btn-primary", onClick: () => setView('create')},
+                  "+ ADD"
                 )
               ),
               React.createElement(
                 "table",
-                {className: "table", style: { borderCollapse: 'collapse' }},
+                {className: "table table-striped table-hover"},
                 React.createElement(
                   "thead",
                   null,
                   React.createElement(
                     "tr",
-                    {style: { borderBottom: '2px solid #e1e3e5' }},
+                    null,
                     React.createElement(
                       "th",
-                      {style: { textTransform: 'uppercase', fontSize: '0.8em', fontWeight: 600, color: '#555', letterSpacing: '0.5px', padding: '10px 12px' }},
+                      null,
                       "Name"
                     ),
                     React.createElement(
                       "th",
-                      {style: { textTransform: 'uppercase', fontSize: '0.8em', fontWeight: 600, color: '#555', letterSpacing: '0.5px', padding: '10px 12px' }},
+                      null,
                       "VIP"
                     ),
                     React.createElement(
                       "th",
-                      {style: { textTransform: 'uppercase', fontSize: '0.8em', fontWeight: 600, color: '#555', letterSpacing: '0.5px', padding: '10px 12px' }},
+                      null,
                       "Status"
                     ),
                     React.createElement(
                       "th",
-                      {style: { textTransform: 'uppercase', fontSize: '0.8em', fontWeight: 600, color: '#555', letterSpacing: '0.5px', padding: '10px 12px' }},
+                      null,
                       "Members"
                     ),
                     React.createElement(
                       "th",
-                      {style: { textTransform: 'uppercase', fontSize: '0.8em', fontWeight: 600, color: '#555', letterSpacing: '0.5px', padding: '10px 12px', width: 80 }}
+                      null
                     )
                   )
                 ),
@@ -1820,20 +1939,20 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                   lbs.map(lb => (
                             React.createElement(
                               "tr",
-                              {key: lb.id, style: { borderBottom: '1px solid #eee' }},
+                              {key: lb.id},
                               React.createElement(
                                 "td",
-                                {style: { padding: '12px', verticalAlign: 'middle', fontWeight: 500, color: '#333' }},
+                                null,
                                 lb.name
                               ),
                               React.createElement(
                                 "td",
-                                {style: { padding: '12px', verticalAlign: 'middle', color: '#555' }},
+                                null,
                                 lb.vip_address
                               ),
                               React.createElement(
                                 "td",
-                                {style: { padding: '12px', verticalAlign: 'middle' }},
+                                null,
                                 React.createElement(
                                   Badge,
                                   {text: lb.provisioning_status, tone: lb.provisioning_status === 'ACTIVE' ? 'success' : 'warning'}
@@ -1841,38 +1960,44 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                               ),
                               React.createElement(
                                 "td",
-                                {style: { padding: '12px', verticalAlign: 'middle', color: '#555' }},
+                                null,
                                 (lb.members || []).length
                               ),
                               React.createElement(
                                 "td",
-                                {style: { padding: '12px', verticalAlign: 'middle', textAlign: 'right', whiteSpace: 'nowrap' }},
+                                {style: { textAlign: 'right', whiteSpace: 'nowrap' }},
                                 React.createElement(
                                   "button",
-                                  {className: "btn btn-link btn-sm", style: { marginRight: 6, padding: '3px 8px' }, title: "Edit", onClick: () => { setSelectedLb(lb); setView('edit'); }},
+                                  {className: "btn btn-link btn-sm", title: "Edit", onClick: () => { setSelectedLb(lb); setView('edit'); }},
                                   React.createElement(
-                                    "img",
-                                    {src: "/assets/octavia1234/images/pencil.svg", style: { width: 14, height: 14 }, alt: "Edit"}
+                                    "i",
+                                    {className: "fa fa-pencil", style: { fontSize: '1.2em' }}
                                   )
                                 ),
                                 React.createElement(
                                   "button",
-                                  {className: "btn btn-link btn-sm", style: { padding: '3px 8px' }, title: "Delete", onClick: () => setDeleteTarget(lb)},
+                                  {className: "btn btn-link btn-sm", title: "Delete", onClick: () => setDeleteTarget(lb)},
                                   React.createElement(
-                                    "img",
-                                    {src: "/assets/octavia1234/images/trash.svg", style: { width: 14, height: 14 }, alt: "Delete"}
+                                    "i",
+                                    {className: "fa fa-trash", style: { fontSize: '1.2em' }}
                                   )
                                 )
                               )
                             )
-                        ))
+                        )),
+                  lbs.length === 0 && (
+                            React.createElement(
+                              "tr",
+                              null,
+                              React.createElement(
+                                "td",
+                                {colSpan: "5", style: { textAlign: 'center', padding: 40, color: '#999' }},
+                                "No Load Balancers found. Click \"ADD\" to create one."
+                              )
+                            )
+                        )
                 )
-              ),
-              lbs.length === 0 && React.createElement(
-                      "div",
-                      {style: { textAlign: 'center', padding: '30px 0', color: '#999' }},
-                      "No Load Balancers found. Click \"+ Add\" to create one."
-                    )
+              )
             )
         );
     };
@@ -1905,7 +2030,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
         if (lbs.length === 0) return React.createElement(
                                        "div",
                                        {className: "alert alert-info"},
-                                       "This instance is not a member of any Octavia load balancer."
+                                       "This instance is not a member of any Load Balancers."
                                      )
 
         return (

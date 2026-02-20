@@ -28,7 +28,10 @@ class MorpheusLookupService {
     Map getNetworkContext(Long networkId) {
         try {
             Network net = morpheus.network.getNetworkById(networkId)?.blockingGet()
-            def cloud = net?.cloud
+            def cloud = null
+            if (net?.refType == 'ComputeZone' && net?.refId) {
+                cloud = morpheus.cloud.getCloudById(net.refId)?.blockingGet()
+            }
             def project = net?.project
             return [network: net, cloud: cloud, project: project]
         } catch (Exception ex) {
@@ -59,7 +62,10 @@ class MorpheusLookupService {
     List<Map> listFloatingIpPools(Long networkId) {
         try {
             Network net = morpheus.network.getNetworkById(networkId)?.blockingGet()
-            def cloud = net?.cloud
+            def cloud = null
+            if (net?.refType == 'ComputeZone' && net?.refId) {
+                cloud = morpheus.cloud.getCloudById(net.refId)?.blockingGet()
+            }
             if (!cloud) return []
             def pools = morpheus.network.listFloatingIpPools(cloud)?.toList()?.blockingGet() ?: []
             return pools.collect { [name: it?.name ?: "Pool ${it?.id}", value: it?.id?.toString()] }

@@ -747,8 +747,11 @@
                                             {className: "text-right"},
                                             React.createElement(
                                               "button",
-                                              {className: "btn btn-xs", style: { backgroundColor: '#b00020', color: '#fff', border: 'none', fontWeight: 600 }, onClick: () => removeMember(m.id)},
-                                              "&times;"
+                                              {className: "btn btn-xs", style: { backgroundColor: '#b00020', color: '#fff', border: 'none', padding: '3px 8px' }, onClick: () => removeMember(m.id)},
+                                              React.createElement(
+                                                "i",
+                                                {className: "fa fa-trash"}
+                                              )
                                             )
                                           )
                                         )

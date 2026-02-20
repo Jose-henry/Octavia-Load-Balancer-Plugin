@@ -23,7 +23,7 @@
         if (lbs.length === 0) return React.createElement(
                                        "div",
                                        {className: "alert alert-info"},
-                                       "This instance is not a member of any Octavia load balancer."
+                                       "This instance is not a member of any Load Balancers."
                                      )
 
         return (

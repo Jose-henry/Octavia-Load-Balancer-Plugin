@@ -342,18 +342,18 @@ class OctaviaController implements PluginController {
         log.info("optionProjects() handler called")
         try {
             if (isMockMode()) {
-                return JsonResponse.of([projects: [[name: 'Mock Project', value: 'mock-project-id']]])
+                return JsonResponse.of([data: [[name: 'Mock Project', value: 'mock-project-id']]])
             }
 
             def ctx = resolveContext(model)
             def project = ctx.project
             if (project) {
-                return JsonResponse.of([projects: [[name: project.name ?: 'Default', value: project.externalId ?: project.id?.toString()]]])
+                return JsonResponse.of([data: [[name: project.name ?: 'Default', value: project.externalId ?: project.id?.toString()]]])
             }
-            return JsonResponse.of([projects: []])
+            return JsonResponse.of([data: []])
         } catch (Exception ex) {
             log.error("optionProjects() failed: {}", ex.message, ex)
-            return JsonResponse.of([projects: []])
+            return JsonResponse.of([data: []])
         }
     }
 
@@ -361,7 +361,7 @@ class OctaviaController implements PluginController {
         log.info("optionSubnets() handler called")
         try {
             if (isMockMode()) {
-                return JsonResponse.of([subnets: [[name: 'mock-subnet (192.168.1.0/24)', value: 'subnet-mock-001', cidr: '192.168.1.0/24']]])
+                return JsonResponse.of([data: [[name: 'mock-subnet (192.168.1.0/24)', value: 'subnet-mock-001', cidr: '192.168.1.0/24']]])
             }
 
             def ctx = resolveContext(model)
@@ -378,12 +378,12 @@ class OctaviaController implements PluginController {
                     // Fallback: return the network itself as a subnet option
                     subnets = [[name: network.name ?: 'Network', value: network.externalId, cidr: network.cidr]]
                 }
-                return JsonResponse.of([subnets: subnets])
+                return JsonResponse.of([data: subnets])
             }
-            return JsonResponse.of([subnets: []])
+            return JsonResponse.of([data: []])
         } catch (Exception ex) {
             log.error("optionSubnets() failed: {}", ex.message, ex)
-            return JsonResponse.of([subnets: []])
+            return JsonResponse.of([data: []])
         }
     }
 
