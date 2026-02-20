@@ -5,6 +5,7 @@ import com.example.providers.OctaviaInstanceTabProvider
 import com.example.providers.OctaviaNetworkTabProvider
 import com.example.providers.OctaviaOptionSourceProvider
 import com.morpheusdata.core.Plugin
+import com.morpheusdata.model.Permission
 import com.morpheusdata.views.HandlebarsRenderer
 import groovy.util.logging.Slf4j
 
@@ -49,7 +50,7 @@ class CustomOctaviaLoadBalancerUiPlugin extends Plugin {
             def controller = new OctaviaController(this, morpheus)
             log.info("OctaviaController created, adding to controllers list...")
             this.controllers.add(controller)
-            log.info("OctaviaController registered successfully. Routes: {}", controller.getRoutes()*.url)
+            log.info("OctaviaController registered successfully. Controllers count: {}. Routes: {}", this.controllers.size(), controller.getRoutes()*.url)
         } catch (Exception ex) {
             log.error("FAILED to register OctaviaController: ${ex.class.name}: ${ex.message}", ex)
         }
@@ -60,5 +61,12 @@ class CustomOctaviaLoadBalancerUiPlugin extends Plugin {
     @Override
     void onDestroy() {
         log.info("Destroying Custom Octavia Load Balancer UI plugin")
+    }
+
+    @Override
+    List<Permission> getPermissions() {
+        return [
+            new Permission('Octavia Load Balancer Integration', 'octavia-loadbalancer', [Permission.AccessType.none, Permission.AccessType.full])
+        ]
     }
 }

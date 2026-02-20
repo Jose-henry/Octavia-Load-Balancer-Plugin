@@ -116,9 +116,10 @@ window.Octavia = window.Octavia || {};
     }
 
     window.Octavia.makeApi = (pluginCode) => {
-        // Routes are flat: /plugin/{pluginCode}/{methodName}
-        // The Dispatcher maps /plugin/... to controller methods by last URL segment
+        // Fallback or explicit routing logic
+        // We will attempt to use the absolute path to ensure the Dispatcher routes it.
         const baseUrl = `/plugin/${pluginCode}`;
+        console.log(`[Octavia API] Initialized with Base URL: ${baseUrl}`);
 
         // Helper to append context params
         const withContext = (url, ctx) => {
@@ -128,6 +129,11 @@ window.Octavia = window.Octavia || {};
             if (params.length === 0) return url;
             return url + (url.includes('?') ? '&' : '?') + params.join('&');
         };
+
+        // --- RPC Wrapper for OptionSourceProvider Workaround ---
+        // --- RPC Wrapper for OptionSourceProvider Workaround ---
+        // Reverting back to PluginController endpoints since OptionSourceProvider returns 401 without API tokens.
+        // The PluginController integrates directly with the Morpheus UI session via /plugin/{code}/...
 
         return {
             listLoadBalancers: (ctx) => {
@@ -152,25 +158,27 @@ window.Octavia = window.Octavia || {};
 
             listOptions: (networkId, instanceId) => {
                 const ctx = { networkId, instanceId };
-                // Each option type has its own flattened route
                 return Promise.all([
-                    apiFetch(withContext(`${baseUrl}/optionProjects`, ctx)),
-                    apiFetch(withContext(`${baseUrl}/optionSubnets`, ctx)),
-                    apiFetch(withContext(`${baseUrl}/optionInstances`, ctx)),
-                    apiFetch(withContext(`${baseUrl}/optionFloatingIpPools`, ctx))
+                    apiFetch(withContext(`${baseUrl}/optionProjects`, ctx)).then(res => ({ optionProjects: res.data || [] })),
+                    apiFetch(withContext(`${baseUrl}/optionSubnets`, ctx)).then(res => ({ optionSubnets: res.data || [] })),
+                    apiFetch(withContext(`${baseUrl}/optionInstances`, ctx)).then(res => ({ optionInstances: res.data || [] })),
+                    apiFetch(withContext(`${baseUrl}/optionFloatingIpPools`, ctx)).then(res => ({ optionFloatingIpPools: res.data || [] }))
                 ]).then(results => results.reduce((acc, curr) => ({ ...acc, ...curr }), {}));
             },
 
             // Helpers for Edit Modal
-            listListeners: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx)).then(r => ({ listeners: r.loadbalancer?.listeners || [] })),
+            listListeners: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx))
+                .then(r => ({ listeners: r.loadbalancer?.listeners || [] })),
 
-            listPools: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx)).then(r => ({ pools: r.loadbalancer?.pools || [] })),
+            listPools: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx))
+                .then(r => ({ pools: r.loadbalancer?.pools || [] })),
 
-            getHealthMonitor: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx)).then(r => {
-                const pools = r.loadbalancer?.pools || [];
-                const monitorId = pools.find(p => p.healthmonitor_id)?.healthmonitor_id;
-                return { monitor: monitorId ? { id: monitorId } : null };
-            }),
+            getHealthMonitor: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx))
+                .then(r => {
+                    const pools = r.loadbalancer?.pools || [];
+                    const monitorId = pools.find(p => p.healthmonitor_id)?.healthmonitor_id;
+                    return { monitor: monitorId ? { id: monitorId } : null };
+                }),
 
             attachFloatingIp: (lbId, fipPoolId, networkId) => apiFetch(`${baseUrl}/floatingipAttach`, { method: 'POST', body: JSON.stringify({ lbId, floatingIpPoolId: fipPoolId, networkId }) }),
 
