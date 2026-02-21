@@ -813,6 +813,10 @@ window.Octavia = window.Octavia || {};
             update('members', (data.members || []).filter(m => m.id !== id));
         };
 
+        const updateMember = (id, field, value) => {
+            update('members', (data.members || []).map(m => m.id === id ? { ...m, [field]: value } : m));
+        };
+
         return (
             React.createElement(
               "div",
@@ -996,12 +1000,18 @@ window.Octavia = window.Octavia || {};
                                           React.createElement(
                                             "td",
                                             null,
-                                            m.port
+                                            React.createElement(
+                                              "input",
+                                              {type: "number", className: "form-control input-sm", style: { width: 80 }, value: m.port, onChange: e => updateMember(m.id, 'port', parseInt(e.target.value) || 80)}
+                                            )
                                           ),
                                           React.createElement(
                                             "td",
                                             null,
-                                            m.weight
+                                            React.createElement(
+                                              "input",
+                                              {type: "number", className: "form-control input-sm", style: { width: 80 }, value: m.weight, onChange: e => updateMember(m.id, 'weight', parseInt(e.target.value) || 1)}
+                                            )
                                           ),
                                           React.createElement(
                                             "td",

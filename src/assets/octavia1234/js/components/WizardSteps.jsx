@@ -256,6 +256,10 @@
             update('members', (data.members || []).filter(m => m.id !== id));
         };
 
+        const updateMember = (id, field, value) => {
+            update('members', (data.members || []).map(m => m.id === id ? { ...m, [field]: value } : m));
+        };
+
         return (
             <div>
                 {!data.createPool ? <div className="alert alert-warning">Pool creation is disabled. No members can be added.</div> :
@@ -300,8 +304,8 @@
                                         <tr key={m.id}>
                                             <td>{m.name}</td>
                                             <td>{m.address}</td>
-                                            <td>{m.port}</td>
-                                            <td>{m.weight}</td>
+                                            <td><input type="number" className="form-control input-sm" style={{ width: 80 }} value={m.port} onChange={e => updateMember(m.id, 'port', parseInt(e.target.value) || 80)} /></td>
+                                            <td><input type="number" className="form-control input-sm" style={{ width: 80 }} value={m.weight} onChange={e => updateMember(m.id, 'weight', parseInt(e.target.value) || 1)} /></td>
                                             <td><Badge text={m.type || 'INTERNAL'} tone={m.type === 'EXTERNAL' ? 'warning' : 'info'} /></td>
                                             <td className="text-right"><button className="btn btn-xs" style={{ backgroundColor: '#b00020', color: '#fff', border: 'none', padding: '4px 8px', fontWeight: 'bold' }} onClick={() => removeMember(m.id)}><i className="fa fa-trash"></i> REMOVE</button></td>
                                         </tr>
