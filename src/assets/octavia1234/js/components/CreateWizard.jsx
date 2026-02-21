@@ -14,7 +14,9 @@
             createMonitor: true,
             listenerProtocol: 'HTTP', listenerPort: 80,
             poolProtocol: 'HTTP', poolAlgorithm: 'ROUND_ROBIN',
-            monitorType: 'HTTP', members: []
+            monitorType: 'HTTP', members: [],
+            delay: 5, timeout: 5, maxRetries: 3, maxRetriesDown: 3,
+            httpMethod: 'GET', expectedCodes: '200', urlPath: '/'
         });
         const [loading, setLoading] = React.useState(false);
 
@@ -128,12 +130,22 @@
                         <div className="modal-body">
                             {validationMsg && <div className="alert alert-danger" style={{ padding: '10px 15px', marginBottom: 20 }}>{validationMsg}</div>}
                             <div className="wizard" style={{ marginBottom: 20 }}>
-                                <ul className="breadcrumbs">
-                                    <li className={step === 1 ? 'bc active' : 'bc'} onClick={() => handleTabClick(1)} style={{ cursor: 'pointer' }}>Details</li>
-                                    <li className={step === 2 ? 'bc active' : 'bc'} onClick={() => handleTabClick(2)} style={{ cursor: 'pointer' }}>Listener</li>
-                                    <li className={step === 3 ? 'bc active' : 'bc'} onClick={() => handleTabClick(3)} style={{ cursor: 'pointer' }}>Pool</li>
-                                    <li className={step === 4 ? 'bc active' : 'bc'} onClick={() => handleTabClick(4)} style={{ cursor: 'pointer' }}>Members</li>
-                                    <li className={step === 5 ? 'bc active' : 'bc'} onClick={() => handleTabClick(5)} style={{ cursor: 'pointer' }}>Monitor</li>
+                                <ul className="breadcrumbs" style={{ paddingLeft: 0, margin: 0 }}>
+                                    <li className={`bc ${step === 1 ? 'active' : step > 1 ? 'prevActive' : ''}`} onClick={() => handleTabClick(1)} style={{ cursor: 'pointer' }}>
+                                        Details
+                                    </li>
+                                    <li className={`bc ${step === 2 ? 'active' : step > 2 ? 'prevActive' : ''}`} onClick={() => handleTabClick(2)} style={{ cursor: 'pointer' }}>
+                                        Listener
+                                    </li>
+                                    <li className={`bc ${step === 3 ? 'active' : step > 3 ? 'prevActive' : ''}`} onClick={() => handleTabClick(3)} style={{ cursor: 'pointer' }}>
+                                        Pool
+                                    </li>
+                                    <li className={`bc ${step === 4 ? 'active' : step > 4 ? 'prevActive' : ''}`} onClick={() => handleTabClick(4)} style={{ cursor: 'pointer' }}>
+                                        Members
+                                    </li>
+                                    <li className={`bc ${step === 5 ? 'active' : step > 5 ? 'prevActive' : ''}`} onClick={() => handleTabClick(5)} style={{ cursor: 'pointer' }}>
+                                        Monitor
+                                    </li>
                                 </ul>
                             </div>
                             {renderStep()}

@@ -14,6 +14,7 @@ import com.example.octavia.service.OctaviaLoadBalancerService
 import com.example.octavia.service.OctaviaPoolService
 import com.example.octavia.service.OctaviaNetworkingService
 import com.example.octavia.service.MockOctaviaService
+import com.example.octavia.service.OctaviaAuthService
 
 /**
  * Production Octavia controller — integrates real Octavia API services
@@ -35,6 +36,7 @@ class OctaviaController implements PluginController {
     private OctaviaNetworkingService networkingService
     private MockOctaviaService mockService
     private MorpheusLookupService lookupService
+    private OctaviaAuthService authService
 
     OctaviaController(Plugin plugin, MorpheusContext morpheusContext) {
         this.plugin = plugin
@@ -44,11 +46,12 @@ class OctaviaController implements PluginController {
     }
 
     private void initServices(MorpheusContext ctx) {
-        this.lbService = new OctaviaLoadBalancerService()
+        this.lbService = new OctaviaLoadBalancerService(ctx)
         this.poolService = new OctaviaPoolService()
         this.networkingService = new OctaviaNetworkingService()
         this.mockService = new MockOctaviaService()
         this.lookupService = ctx ? new MorpheusLookupService(ctx) : null
+        this.authService = ctx ? new OctaviaAuthService(ctx) : null
     }
 
     // ── PluginController required methods ────────────────────────
@@ -197,13 +200,19 @@ class OctaviaController implements PluginController {
 
             def ctx = resolveContext(model)
             def cloud = ctx.cloud
+            def pool = ctx.pool
             def project = ctx.project
+            
+            // In Morpheus, OpenStack Projects map EXACTLY to Resource Pools (CloudPool).
+            // The Morpheus generic Tenant (project) has no relation to the OpenStack project name.
+            String tenantName = pool?.externalId ?: pool?.name
+            
             if (!cloud) {
                 log.warn("No cloud context found, returning empty list")
                 return JsonResponse.of([loadbalancers: []])
             }
 
-            def result = lbService.listLoadBalancers(cloud, project?.externalId)
+            def result = lbService.list(cloud, tenantName)
             return JsonResponse.of(result)
         } catch (Exception ex) {
             log.error("loadbalancers() failed: {}", ex.message, ex)
@@ -223,12 +232,18 @@ class OctaviaController implements PluginController {
 
             def ctx = resolveContext(model)
             def cloud = ctx.cloud
+            def pool = ctx.pool
             def project = ctx.project
+            
+            // In Morpheus, OpenStack Projects map EXACTLY to Resource Pools (CloudPool).
+            // The Morpheus generic Tenant (project) has no relation to the OpenStack project name.
+            String tenantName = pool?.externalId ?: pool?.name
+            
             if (!cloud) {
                 return JsonResponse.of([success: false, error: 'Cloud context not found'])
             }
 
-            def result = lbService.createLoadBalancer(cloud, project?.externalId, payload)
+            def result = lbService.create(cloud, tenantName, payload)
             return JsonResponse.of(result)
         } catch (Exception ex) {
             log.error("loadbalancersCreate() failed: {}", ex.message, ex)
@@ -249,12 +264,18 @@ class OctaviaController implements PluginController {
 
             def ctx = resolveContext(model)
             def cloud = ctx.cloud
+            def pool = ctx.pool
             def project = ctx.project
+            
+            // In Morpheus, OpenStack Projects map EXACTLY to Resource Pools (CloudPool).
+            // The Morpheus generic Tenant (project) has no relation to the OpenStack project name.
+            String tenantName = pool?.externalId ?: pool?.name
+            
             if (!cloud || !lbId) {
                 return JsonResponse.of([success: false, error: 'Missing cloud context or LB id'])
             }
 
-            def result = lbService.deleteLoadBalancer(cloud, project?.externalId, lbId)
+            def result = lbService.delete(cloud, tenantName, lbId)
             return JsonResponse.of(result)
         } catch (Exception ex) {
             log.error("loadbalancersDelete() failed: {}", ex.message, ex)
@@ -273,15 +294,21 @@ class OctaviaController implements PluginController {
 
             def ctx = resolveContext(model)
             def cloud = ctx.cloud
+            def pool = ctx.pool
             def project = ctx.project
+            
+            // In Morpheus, OpenStack Projects map EXACTLY to Resource Pools (CloudPool).
+            // The Morpheus generic Tenant (project) has no relation to the OpenStack project name.
+            String tenantName = pool?.externalId ?: pool?.name
+            
             if (!cloud || !lbId) {
                 return JsonResponse.of([success: false, error: 'Missing cloud context or LB id'])
             }
 
             // Fetch the LB details via the list endpoint with filter, or individual get
-            // Since OctaviaLoadBalancerService.listLoadBalancers returns all, filter client-side
-            def allResult = lbService.listLoadBalancers(cloud, project?.externalId)
-            def lbs = allResult.loadbalancers ?: []
+            // Since OctaviaLoadBalancerService.list returns all, filter client-side
+            def allResult = lbService.list(cloud, tenantName)
+            def lbs = allResult.data ?: []
             def lb = lbs.find { it.id == lbId }
             if (lb) {
                 return JsonResponse.of([success: true, loadbalancer: lb])
@@ -307,12 +334,18 @@ class OctaviaController implements PluginController {
 
             def ctx = resolveContext(model)
             def cloud = ctx.cloud
+            def pool = ctx.pool
             def project = ctx.project
+            
+            // In Morpheus, OpenStack Projects map EXACTLY to Resource Pools (CloudPool).
+            // The Morpheus generic Tenant (project) has no relation to the OpenStack project name.
+            String tenantName = pool?.externalId ?: pool?.name
+            
             if (!cloud || !lbId) {
                 return JsonResponse.of([success: false, error: 'Missing cloud context or LB id'])
             }
 
-            def result = lbService.updateLoadBalancer(cloud, project?.externalId, lbId, payload)
+            def result = lbService.update(cloud, tenantName, lbId, payload)
             return JsonResponse.of(result)
         } catch (Exception ex) {
             log.error("loadbalancerUpdate() failed: {}", ex.message, ex)
@@ -380,18 +413,51 @@ class OctaviaController implements PluginController {
         log.info("optionProjects() handler called")
         try {
             if (isMockMode()) {
-                return JsonResponse.of([data: [[name: 'Mock Project', value: 'mock-project-id']]])
+                return JsonResponse.of([data: [[name: 'Mock Project', value: 'mock-project-id']], optionClouds: [[name: 'Mock Cloud', value: 'mock-cloud-id']], resourcePools: [[name: 'Mock Pool', value: 'mock-pool-id']]])
             }
 
             def ctx = resolveContext(model)
             def project = ctx.project
-            if (project) {
-                return JsonResponse.of([data: [[name: project.name ?: 'Default', value: project.externalId ?: project.id?.toString()]]])
+            def pool = ctx.pool 
+            def cloud = ctx.cloud
+            
+            // === AUTHENTICATION TEST ===
+            if (cloud && authService) {
+                log.info("--- TRIGGERING KEYSTONE AUTH TEST ---")
+                
+                // In Morpheus, OpenStack Projects map EXACTLY to Resource Pools (CloudPool).
+                // The Morpheus generic Tenant (project) has no relation to the OpenStack project name.
+                def tenantName = pool?.name ?: pool?.externalId
+                
+                def authMap = authService.getAuthToken(cloud, tenantName)
+                if (authMap.success) {
+                    log.info("Auth Test SUCCESS! Token acquired for Load Balancer API: {}", authMap.loadBalancerApi)
+                    // We don't return the token to the UI for security, but now we know it works!
+                } else {
+                    log.error("Auth Test FAILED: {}", authMap.error)
+                }
+                log.info("-------------------------------------")
             }
-            return JsonResponse.of([data: []])
+            
+            def data = []
+            if (project) {
+                data << [name: project.name ?: 'Default', value: project.externalId ?: project.id?.toString()]
+            }
+            
+            def optionClouds = []
+            if (cloud) {
+                optionClouds << [name: cloud.name ?: 'Default', value: cloud.id?.toString()]
+            }
+            
+            def resourcePools = []
+            if (pool) {
+                resourcePools << [name: pool.name ?: 'Default', value: pool.id?.toString()]
+            }
+            
+            return JsonResponse.of([data: data, optionClouds: optionClouds, resourcePools: resourcePools])
         } catch (Exception ex) {
             log.error("optionProjects() failed: {}", ex.message, ex)
-            return JsonResponse.of([data: []])
+            return JsonResponse.of([data: [], optionClouds: [], resourcePools: []])
         }
     }
 
@@ -403,29 +469,22 @@ class OctaviaController implements PluginController {
             }
 
             def ctx = resolveContext(model)
-            def network = ctx.network
-            if (network) {
-                def subnets = []
-                log.info("Fetching subnets for network ID: ${network.id}")
-                
-                // Fetch using Morpheus Network Subnet Service identity projections
-                def subnetProjections = lookupService.morpheus.async.networkSubnet.listIdentityProjections(network).toList().blockingGet()
-                if (subnetProjections) {
-                    subnets = subnetProjections.collect { sub ->
-                        [name: "${sub.name ?: sub.externalId} (${sub.cidr ?: 'n/a'})", value: sub.externalId ?: sub.id?.toString(), cidr: sub.cidr]
-                    }
-                } else if (network.subnets) {
-                    // Fallback to directly fetching network.subnets if projection is empty
-                    subnets = network.subnets.collect { sub ->
-                        [name: "${sub.name ?: sub.externalId} (${sub.cidr ?: 'n/a'})", value: sub.externalId ?: sub.id?.toString(), cidr: sub.cidr]
-                    }
-                } else if (network.externalId) {
-                    // Fallback to the network itself if absolutely no subnets are registered
-                    subnets = [[name: network.name ?: 'Network', value: network.externalId, cidr: network.cidr]]
+            def subnetsList = ctx.subnets
+            
+            if (subnetsList) {
+                log.info("Mapping {} subnets for network ID: {}", subnetsList.size(), ctx.network?.id)
+                def subnets = subnetsList.collect { sub ->
+                    // Use the explicit sub model getters
+                    [name: sub.getName() ?: sub.getExternalId(), value: sub.getExternalId() ?: sub.getId()?.toString(), cidr: sub.getCidr()]
                 }
-                
+                return JsonResponse.of([data: subnets])
+            } else if (ctx.network) {
+                log.warn("No subnets found for network ID {}, falling back to Network itself", ctx.network.id)
+                def net = ctx.network
+                def subnets = [[name: net.getName() ?: 'Network', value: net.getExternalId(), cidr: net.getCidr()]]
                 return JsonResponse.of([data: subnets])
             }
+            
             log.warn("network was null in ctx in optionSubnets()")
             return JsonResponse.of([data: []])
         } catch (Exception ex) {

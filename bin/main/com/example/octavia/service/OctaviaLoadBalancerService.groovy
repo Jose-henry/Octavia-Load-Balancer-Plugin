@@ -283,12 +283,16 @@ class OctaviaLoadBalancerService {
      * Helper to instantiate an authenticated client
      */
     private OctaviaApiClient getClient(Cloud cloud, String projectId) {
-        OpenStackAuthClient auth = new OpenStackAuthClient(cloud)
-        Map session = auth.getSession(projectId)
+        OctaviaAuthService auth = new OctaviaAuthService(morpheusContext)
+        Map session = auth.getAuthToken(cloud, projectId)
         
-        String endpoint = session.octaviaUrl
+        if (!session.success) {
+            throw new RuntimeException("Octavia auth failed: ${session.error}")
+        }
+        
+        String endpoint = session.loadBalancerApi
         if (!endpoint) {
-             throw new RuntimeException("No Octavia endpoint found in Keystone catalog for cloud ${cloud.id}")
+             throw new RuntimeException("No Octavia load balancer endpoint found for cloud ${cloud.id}")
         }
         
         return new OctaviaApiClient(new HttpApiClient(), endpoint, session.token as String)

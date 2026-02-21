@@ -2,10 +2,42 @@
     // --- Step 1: Details ---
     const Step1_Details = ({ data, update, options }) => {
         const { Field } = window.Octavia;
+
+        const cloud = options?.optionClouds?.[0]?.name || options?.cloud?.name || data?.cloud?.name || 'None';
+        const resourcePool = options?.optionResourcePools?.[0]?.name || 'None';
+
         return (
             React.createElement(
               "div",
               {className: "form-horizontal"},
+              React.createElement(
+                "div",
+                {className: "row"},
+                React.createElement(
+                  "div",
+                  {className: "col-md-6"},
+                  React.createElement(
+                    Field,
+                    {label: "Cloud"},
+                    React.createElement(
+                      "input",
+                      {className: "form-control", value: cloud, readOnly: true, disabled: true}
+                    )
+                  )
+                ),
+                React.createElement(
+                  "div",
+                  {className: "col-md-6"},
+                  React.createElement(
+                    Field,
+                    {label: "Resource Pool"},
+                    React.createElement(
+                      "input",
+                      {className: "form-control", value: resourcePool, readOnly: true, disabled: true}
+                    )
+                  )
+                )
+              ),
               React.createElement(
                 "div",
                 {className: "row"},
@@ -192,52 +224,60 @@
                          ),
                          !hideTimeouts && React.createElement(
                    "div",
-                   {className: "row"},
+                   null,
                    React.createElement(
                      "div",
-                     {className: "col-md-3"},
+                     {className: "row"},
                      React.createElement(
-                       Field,
-                       {label: "Client Data Timeout"},
+                       "div",
+                       {className: "col-md-6"},
                        React.createElement(
-                         "input",
-                         {type: "number", className: "form-control", value: data.clientDataTimeout || 50000, onChange: e => update('clientDataTimeout', parseInt(e.target.value))}
+                         Field,
+                         {label: "Client Data Timeout"},
+                         React.createElement(
+                           "input",
+                           {type: "number", className: "form-control", value: data.clientDataTimeout || 50000, onChange: e => update('clientDataTimeout', parseInt(e.target.value))}
+                         )
+                       )
+                     ),
+                     React.createElement(
+                       "div",
+                       {className: "col-md-6"},
+                       React.createElement(
+                         Field,
+                         {label: "TCP Inspect Timeout"},
+                         React.createElement(
+                           "input",
+                           {type: "number", className: "form-control", value: data.tcpInspectTimeout || 0, onChange: e => update('tcpInspectTimeout', parseInt(e.target.value))}
+                         )
                        )
                      )
                    ),
                    React.createElement(
                      "div",
-                     {className: "col-md-3"},
+                     {className: "row"},
                      React.createElement(
-                       Field,
-                       {label: "TCP Inspect Timeout"},
+                       "div",
+                       {className: "col-md-6"},
                        React.createElement(
-                         "input",
-                         {type: "number", className: "form-control", value: data.tcpInspectTimeout || 0, onChange: e => update('tcpInspectTimeout', parseInt(e.target.value))}
+                         Field,
+                         {label: "Member Connect Timeout"},
+                         React.createElement(
+                           "input",
+                           {type: "number", className: "form-control", value: data.memberConnectTimeout || 5000, onChange: e => update('memberConnectTimeout', parseInt(e.target.value))}
+                         )
                        )
-                     )
-                   ),
-                   React.createElement(
-                     "div",
-                     {className: "col-md-3"},
+                     ),
                      React.createElement(
-                       Field,
-                       {label: "Member Connect Timeout"},
+                       "div",
+                       {className: "col-md-6"},
                        React.createElement(
-                         "input",
-                         {type: "number", className: "form-control", value: data.memberConnectTimeout || 5000, onChange: e => update('memberConnectTimeout', parseInt(e.target.value))}
-                       )
-                     )
-                   ),
-                   React.createElement(
-                     "div",
-                     {className: "col-md-3"},
-                     React.createElement(
-                       Field,
-                       {label: "Member Data Timeout"},
-                       React.createElement(
-                         "input",
-                         {type: "number", className: "form-control", value: data.memberDataTimeout || 50000, onChange: e => update('memberDataTimeout', parseInt(e.target.value))}
+                         Field,
+                         {label: "Member Data Timeout"},
+                         React.createElement(
+                           "input",
+                           {type: "number", className: "form-control", value: data.memberDataTimeout || 50000, onChange: e => update('memberDataTimeout', parseInt(e.target.value))}
+                         )
                        )
                      )
                    )
@@ -747,11 +787,12 @@
                                             {className: "text-right"},
                                             React.createElement(
                                               "button",
-                                              {className: "btn btn-xs", style: { backgroundColor: '#b00020', color: '#fff', border: 'none', padding: '3px 8px' }, onClick: () => removeMember(m.id)},
+                                              {className: "btn btn-xs", style: { backgroundColor: '#b00020', color: '#fff', border: 'none', padding: '4px 8px', fontWeight: 'bold' }, onClick: () => removeMember(m.id)},
                                               React.createElement(
                                                 "i",
                                                 {className: "fa fa-trash"}
-                                              )
+                                              ),
+                                              " REMOVE"
                                             )
                                           )
                                         )
@@ -840,7 +881,7 @@
                                                                      {className: "row"},
                                                                      React.createElement(
                                                                        "div",
-                                                                       {className: "col-md-4"},
+                                                                       {className: "col-md-6"},
                                                                        React.createElement(
                                                                          Field,
                                                                          {label: "HTTP Method"},
@@ -857,7 +898,7 @@
                                                                      ),
                                                                      React.createElement(
                                                                        "div",
-                                                                       {className: "col-md-4"},
+                                                                       {className: "col-md-6"},
                                                                        React.createElement(
                                                                          Field,
                                                                          {label: "Expected Codes"},
@@ -866,10 +907,14 @@
                                                                            {className: "form-control", value: data.expectedCodes || '200', onChange: e => update('expectedCodes', e.target.value), placeholder: "200, 200-204"}
                                                                          )
                                                                        )
-                                                                     ),
+                                                                     )
+                                                                   ),
+                                                                   React.createElement(
+                                                                     "div",
+                                                                     {className: "row"},
                                                                      React.createElement(
                                                                        "div",
-                                                                       {className: "col-md-4"},
+                                                                       {className: "col-md-6"},
                                                                        React.createElement(
                                                                          Field,
                                                                          {label: "URL Path"},
@@ -886,7 +931,7 @@
                           {className: "row"},
                           React.createElement(
                             "div",
-                            {className: "col-md-3"},
+                            {className: "col-md-6"},
                             React.createElement(
                               Field,
                               {label: "Delay (sec)", required: true},
@@ -898,7 +943,7 @@
                           ),
                           React.createElement(
                             "div",
-                            {className: "col-md-3"},
+                            {className: "col-md-6"},
                             React.createElement(
                               Field,
                               {label: "Timeout (sec)", required: true},
@@ -907,10 +952,14 @@
                                 {type: "number", className: "form-control", value: data.timeout || 5, onChange: e => update('timeout', parseInt(e.target.value))}
                               )
                             )
-                          ),
+                          )
+                        ),
+                        React.createElement(
+                          "div",
+                          {className: "row"},
                           React.createElement(
                             "div",
-                            {className: "col-md-3"},
+                            {className: "col-md-6"},
                             React.createElement(
                               Field,
                               {label: "Max Retries", required: true},
@@ -922,7 +971,7 @@
                           ),
                           React.createElement(
                             "div",
-                            {className: "col-md-3"},
+                            {className: "col-md-6"},
                             React.createElement(
                               Field,
                               {label: "Max Retries Down"},

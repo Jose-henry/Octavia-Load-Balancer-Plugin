@@ -1,5 +1,5 @@
 ; (function () {
-    const EditLBModal = ({ lb, networkId, onClose, onUpdated }) => {
+    const EditLBModal = ({ lb, networkId, options, onClose, onUpdated }) => {
         const Api = window.Octavia.api;
         const { Field, Badge, useAsync } = window.Octavia;
         const { Step2_Listener, Step3_Pool, Step4_Members, Step5_Monitor } = window.Octavia.Steps;
@@ -87,11 +87,11 @@
         ];
 
         return (
-            <div className="modal fade in" style={{ display: 'block', overflow: 'auto' }}>
+            <div className="modal fade in" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', overflowY: 'auto' }}>
                 <div className="modal-dialog modal-lg">
                     <div className="modal-content">
                         <div className="modal-header">
-                            <button type="button" className="close" onClick={onClose} data-dismiss="modal" aria-label="Close">
+                            <button type="button" className="close" onClick={onClose} aria-label="Close" data-dismiss="modal">
                                 <span aria-hidden="true">
                                     <svg version="1.1" className="close-icon" xmlns="http://www.w3.org/2000/svg" xmlnsXlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 59.9 59.9" enableBackground="new 0 0 59.9 59.9" xmlSpace="preserve">
                                         <line fill="none" stroke="currentColor" strokeMiterlimit="10" x1="57.4" y1="2.5" x2="2.5" y2="57.4"></line>
@@ -101,41 +101,59 @@
                             </button>
                             <h4 className="modal-title">Edit Load Balancer</h4>
                         </div>
-                        <div className="modal-body" style={{ padding: 0 }}>
-                            <div className="tab-container">
-                                <ul className="nav nav-tabs" style={{ paddingLeft: 20, paddingTop: 10 }}>
-                                    {editTabs.map((t, i) => (
-                                        <li key={t.key} className={tab === t.key ? 'active' : ''}>
-                                            <a href="#" onClick={(e) => { e.preventDefault(); setTab(t.key); }}>{t.title}</a>
-                                        </li>
-                                    ))}
+
+                        <div className="modal-body">
+                            <div className="wizard" style={{ marginBottom: 20 }}>
+                                <ul className="breadcrumbs" style={{ paddingLeft: 0, margin: 0 }}>
+                                    {editTabs.map((t, index) => {
+                                        const currentIdx = editTabs.findIndex(et => et.key === tab);
+                                        const liClass = `bc ${tab === t.key ? 'active' : index < currentIdx ? 'prevActive' : ''}`;
+                                        return (
+                                            <li key={t.key} className={liClass} onClick={() => setTab(t.key)} style={{ cursor: 'pointer' }}>
+                                                {t.title}
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
-                                <div className="tab-content" style={{ padding: 20 }}>
-                                    {loading ? <div style={{ textAlign: 'center', padding: 40 }}><i className="fa fa-spinner fa-spin"></i> Loading...</div> : <div>
-                                        {tab === 'general' && <div className="form-horizontal">
-                                            <Field label="Name"><input className="form-control" value={data.name || ''} onChange={e => update('name', e.target.value)} /></Field>
-                                            <Field label="Description"><input className="form-control" value={data.description || ''} onChange={e => update('description', e.target.value)} /></Field>
-                                            <div className="form-group"><div className="col-sm-12"><div className="checkbox"><label><input type="checkbox" checked={data.admin_state_up} onChange={e => update('admin_state_up', e.target.checked)} /> Admin State Up</label></div></div></div>
-                                        </div>}
-                                        {tab === 'listener' && <Step2_Listener data={data} update={update} />}
-                                        {tab === 'pool' && <div>
-                                            <Step3_Pool data={data} update={update} />
-                                            <hr />
-                                            <h5 style={{ fontWeight: 600, marginBottom: 15 }}>Members</h5>
-                                            <Step4_Members data={data} update={update} options={{ instances: [] }} />
-                                        </div>}
-                                        {tab === 'monitor' && <Step5_Monitor data={data} update={update} />}
+                            </div>
+
+                            <div className="tab-content" style={{ padding: '10px 0' }}>
+                                {loading ? <div style={{ textAlign: 'center', padding: 40 }}><i className="fa fa-spinner fa-spin"></i> Loading...</div> : <div>
+                                    {tab === 'general' && <div className="form-horizontal">
+                                        <div className="row">
+                                            <div className="col-md-6">
+                                                <Field label="Cloud">
+                                                    <input className="form-control" value={options?.optionClouds?.[0]?.name || options?.cloud?.name || data?.cloud?.name || 'None'} readOnly disabled />
+                                                </Field>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <Field label="Resource Pool">
+                                                    <input className="form-control" value={options?.optionResourcePools?.[0]?.name || 'None'} readOnly disabled />
+                                                </Field>
+                                            </div>
+                                        </div>
+                                        <Field label="Name"><input className="form-control" value={data.name || ''} onChange={e => update('name', e.target.value)} /></Field>
+                                        <Field label="Description"><input className="form-control" value={data.description || ''} onChange={e => update('description', e.target.value)} /></Field>
+                                        <div className="form-group"><div className="col-sm-12"><div className="checkbox"><label><input type="checkbox" checked={data.admin_state_up} onChange={e => update('admin_state_up', e.target.checked)} /> Admin State Up</label></div></div></div>
                                     </div>}
-                                </div>
+                                    {tab === 'listener' && <Step2_Listener data={data} update={update} />}
+                                    {tab === 'pool' && <div>
+                                        <Step3_Pool data={data} update={update} />
+                                        <hr />
+                                        <h5 style={{ fontWeight: 600, marginBottom: 15 }}>Members</h5>
+                                        <Step4_Members data={data} update={update} options={{ instances: [] }} />
+                                    </div>}
+                                    {tab === 'monitor' && <Step5_Monitor data={data} update={update} />}
+                                </div>}
                             </div>
                         </div>
+
                         <div className="modal-footer">
-                            <button className="btn btn-link" onClick={onClose}>Cancel</button>
-                            <button className="btn btn-primary" onClick={save} disabled={saving || loading}>{saving ? 'Saving...' : 'Save Changes'}</button>
+                            <button className="btn btn-default" onClick={onClose}>Cancel</button>
+                            <button className="btn btn-success" onClick={save} disabled={saving || loading}>{saving ? 'Saving...' : 'Save Changes'}</button>
                         </div>
                     </div>
                 </div>
-                <div className="modal-backdrop fade in"></div>
             </div>
         );
     };

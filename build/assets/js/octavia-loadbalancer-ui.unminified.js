@@ -161,15 +161,9 @@ window.Octavia = window.Octavia || {};
                 return apiFetch(`${baseUrl}/loadbalancersDelete`, { method: 'POST', body: JSON.stringify({ lbId, networkId }) });
             },
 
-            listOptions: (networkId, instanceId) => {
-                const ctx = { networkId, instanceId };
-                return Promise.all([
-                    apiFetch(withContext(`${baseUrl}/optionProjects`, ctx)).then(res => ({ optionProjects: res.data || [] })),
-                    apiFetch(withContext(`${baseUrl}/optionSubnets`, ctx)).then(res => ({ optionSubnets: res.data || [] })),
-                    apiFetch(withContext(`${baseUrl}/optionInstances`, ctx)).then(res => ({ optionInstances: res.data || [] })),
-                    apiFetch(withContext(`${baseUrl}/optionFloatingIpPools`, ctx)).then(res => ({ optionFloatingIpPools: res.data || [] }))
-                ]).then(results => results.reduce((acc, curr) => ({ ...acc, ...curr }), {}));
-            },
+            getProjects: (ctx) => apiFetch(withContext(`${baseUrl}/optionProjects`, ctx)),
+            getInstances: (ctx) => apiFetch(withContext(`${baseUrl}/optionInstances`, ctx)),
+            getFloatingIpPools: (ctx) => apiFetch(withContext(`${baseUrl}/optionFloatingIpPools`, ctx)),
 
             // Helpers for Edit Modal
             listListeners: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx))
@@ -237,10 +231,42 @@ window.Octavia = window.Octavia || {};
     // --- Step 1: Details ---
     const Step1_Details = ({ data, update, options }) => {
         const { Field } = window.Octavia;
+
+        const cloud = options?.optionClouds?.[0]?.name || options?.cloud?.name || data?.cloud?.name || 'None';
+        const resourcePool = options?.optionResourcePools?.[0]?.name || 'None';
+
         return (
             React.createElement(
               "div",
               {className: "form-horizontal"},
+              React.createElement(
+                "div",
+                {className: "row"},
+                React.createElement(
+                  "div",
+                  {className: "col-md-6"},
+                  React.createElement(
+                    Field,
+                    {label: "Cloud"},
+                    React.createElement(
+                      "input",
+                      {className: "form-control", value: cloud, readOnly: true, disabled: true}
+                    )
+                  )
+                ),
+                React.createElement(
+                  "div",
+                  {className: "col-md-6"},
+                  React.createElement(
+                    Field,
+                    {label: "Resource Pool"},
+                    React.createElement(
+                      "input",
+                      {className: "form-control", value: resourcePool, readOnly: true, disabled: true}
+                    )
+                  )
+                )
+              ),
               React.createElement(
                 "div",
                 {className: "row"},
@@ -427,52 +453,60 @@ window.Octavia = window.Octavia || {};
                          ),
                          !hideTimeouts && React.createElement(
                    "div",
-                   {className: "row"},
+                   null,
                    React.createElement(
                      "div",
-                     {className: "col-md-3"},
+                     {className: "row"},
                      React.createElement(
-                       Field,
-                       {label: "Client Data Timeout"},
+                       "div",
+                       {className: "col-md-6"},
                        React.createElement(
-                         "input",
-                         {type: "number", className: "form-control", value: data.clientDataTimeout || 50000, onChange: e => update('clientDataTimeout', parseInt(e.target.value))}
+                         Field,
+                         {label: "Client Data Timeout"},
+                         React.createElement(
+                           "input",
+                           {type: "number", className: "form-control", value: data.clientDataTimeout || 50000, onChange: e => update('clientDataTimeout', parseInt(e.target.value))}
+                         )
+                       )
+                     ),
+                     React.createElement(
+                       "div",
+                       {className: "col-md-6"},
+                       React.createElement(
+                         Field,
+                         {label: "TCP Inspect Timeout"},
+                         React.createElement(
+                           "input",
+                           {type: "number", className: "form-control", value: data.tcpInspectTimeout || 0, onChange: e => update('tcpInspectTimeout', parseInt(e.target.value))}
+                         )
                        )
                      )
                    ),
                    React.createElement(
                      "div",
-                     {className: "col-md-3"},
+                     {className: "row"},
                      React.createElement(
-                       Field,
-                       {label: "TCP Inspect Timeout"},
+                       "div",
+                       {className: "col-md-6"},
                        React.createElement(
-                         "input",
-                         {type: "number", className: "form-control", value: data.tcpInspectTimeout || 0, onChange: e => update('tcpInspectTimeout', parseInt(e.target.value))}
+                         Field,
+                         {label: "Member Connect Timeout"},
+                         React.createElement(
+                           "input",
+                           {type: "number", className: "form-control", value: data.memberConnectTimeout || 5000, onChange: e => update('memberConnectTimeout', parseInt(e.target.value))}
+                         )
                        )
-                     )
-                   ),
-                   React.createElement(
-                     "div",
-                     {className: "col-md-3"},
+                     ),
                      React.createElement(
-                       Field,
-                       {label: "Member Connect Timeout"},
+                       "div",
+                       {className: "col-md-6"},
                        React.createElement(
-                         "input",
-                         {type: "number", className: "form-control", value: data.memberConnectTimeout || 5000, onChange: e => update('memberConnectTimeout', parseInt(e.target.value))}
-                       )
-                     )
-                   ),
-                   React.createElement(
-                     "div",
-                     {className: "col-md-3"},
-                     React.createElement(
-                       Field,
-                       {label: "Member Data Timeout"},
-                       React.createElement(
-                         "input",
-                         {type: "number", className: "form-control", value: data.memberDataTimeout || 50000, onChange: e => update('memberDataTimeout', parseInt(e.target.value))}
+                         Field,
+                         {label: "Member Data Timeout"},
+                         React.createElement(
+                           "input",
+                           {type: "number", className: "form-control", value: data.memberDataTimeout || 50000, onChange: e => update('memberDataTimeout', parseInt(e.target.value))}
+                         )
                        )
                      )
                    )
@@ -982,11 +1016,12 @@ window.Octavia = window.Octavia || {};
                                             {className: "text-right"},
                                             React.createElement(
                                               "button",
-                                              {className: "btn btn-xs", style: { backgroundColor: '#b00020', color: '#fff', border: 'none', padding: '3px 8px' }, onClick: () => removeMember(m.id)},
+                                              {className: "btn btn-xs", style: { backgroundColor: '#b00020', color: '#fff', border: 'none', padding: '4px 8px', fontWeight: 'bold' }, onClick: () => removeMember(m.id)},
                                               React.createElement(
                                                 "i",
                                                 {className: "fa fa-trash"}
-                                              )
+                                              ),
+                                              " REMOVE"
                                             )
                                           )
                                         )
@@ -1075,7 +1110,7 @@ window.Octavia = window.Octavia || {};
                                                                      {className: "row"},
                                                                      React.createElement(
                                                                        "div",
-                                                                       {className: "col-md-4"},
+                                                                       {className: "col-md-6"},
                                                                        React.createElement(
                                                                          Field,
                                                                          {label: "HTTP Method"},
@@ -1092,7 +1127,7 @@ window.Octavia = window.Octavia || {};
                                                                      ),
                                                                      React.createElement(
                                                                        "div",
-                                                                       {className: "col-md-4"},
+                                                                       {className: "col-md-6"},
                                                                        React.createElement(
                                                                          Field,
                                                                          {label: "Expected Codes"},
@@ -1101,10 +1136,14 @@ window.Octavia = window.Octavia || {};
                                                                            {className: "form-control", value: data.expectedCodes || '200', onChange: e => update('expectedCodes', e.target.value), placeholder: "200, 200-204"}
                                                                          )
                                                                        )
-                                                                     ),
+                                                                     )
+                                                                   ),
+                                                                   React.createElement(
+                                                                     "div",
+                                                                     {className: "row"},
                                                                      React.createElement(
                                                                        "div",
-                                                                       {className: "col-md-4"},
+                                                                       {className: "col-md-6"},
                                                                        React.createElement(
                                                                          Field,
                                                                          {label: "URL Path"},
@@ -1121,7 +1160,7 @@ window.Octavia = window.Octavia || {};
                           {className: "row"},
                           React.createElement(
                             "div",
-                            {className: "col-md-3"},
+                            {className: "col-md-6"},
                             React.createElement(
                               Field,
                               {label: "Delay (sec)", required: true},
@@ -1133,7 +1172,7 @@ window.Octavia = window.Octavia || {};
                           ),
                           React.createElement(
                             "div",
-                            {className: "col-md-3"},
+                            {className: "col-md-6"},
                             React.createElement(
                               Field,
                               {label: "Timeout (sec)", required: true},
@@ -1142,10 +1181,14 @@ window.Octavia = window.Octavia || {};
                                 {type: "number", className: "form-control", value: data.timeout || 5, onChange: e => update('timeout', parseInt(e.target.value))}
                               )
                             )
-                          ),
+                          )
+                        ),
+                        React.createElement(
+                          "div",
+                          {className: "row"},
                           React.createElement(
                             "div",
-                            {className: "col-md-3"},
+                            {className: "col-md-6"},
                             React.createElement(
                               Field,
                               {label: "Max Retries", required: true},
@@ -1157,7 +1200,7 @@ window.Octavia = window.Octavia || {};
                           ),
                           React.createElement(
                             "div",
-                            {className: "col-md-3"},
+                            {className: "col-md-6"},
                             React.createElement(
                               Field,
                               {label: "Max Retries Down"},
@@ -1299,7 +1342,9 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
             createMonitor: true,
             listenerProtocol: 'HTTP', listenerPort: 80,
             poolProtocol: 'HTTP', poolAlgorithm: 'ROUND_ROBIN',
-            monitorType: 'HTTP', members: []
+            monitorType: 'HTTP', members: [],
+            delay: 5, timeout: 5, maxRetries: 3, maxRetriesDown: 3,
+            httpMethod: 'GET', expectedCodes: '200', urlPath: '/'
         });
         const [loading, setLoading] = React.useState(false);
 
@@ -1466,30 +1511,30 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                       {className: "wizard", style: { marginBottom: 20 }},
                       React.createElement(
                         "ul",
-                        {className: "breadcrumbs"},
+                        {className: "breadcrumbs", style: { paddingLeft: 0, margin: 0 }},
                         React.createElement(
                           "li",
-                          {className: step === 1 ? 'bc active' : 'bc', onClick: () => handleTabClick(1), style: { cursor: 'pointer' }},
+                          {className: `bc ${step === 1 ? 'active' : step > 1 ? 'prevActive' : ''}`, onClick: () => handleTabClick(1), style: { cursor: 'pointer' }},
                           "Details"
                         ),
                         React.createElement(
                           "li",
-                          {className: step === 2 ? 'bc active' : 'bc', onClick: () => handleTabClick(2), style: { cursor: 'pointer' }},
+                          {className: `bc ${step === 2 ? 'active' : step > 2 ? 'prevActive' : ''}`, onClick: () => handleTabClick(2), style: { cursor: 'pointer' }},
                           "Listener"
                         ),
                         React.createElement(
                           "li",
-                          {className: step === 3 ? 'bc active' : 'bc', onClick: () => handleTabClick(3), style: { cursor: 'pointer' }},
+                          {className: `bc ${step === 3 ? 'active' : step > 3 ? 'prevActive' : ''}`, onClick: () => handleTabClick(3), style: { cursor: 'pointer' }},
                           "Pool"
                         ),
                         React.createElement(
                           "li",
-                          {className: step === 4 ? 'bc active' : 'bc', onClick: () => handleTabClick(4), style: { cursor: 'pointer' }},
+                          {className: `bc ${step === 4 ? 'active' : step > 4 ? 'prevActive' : ''}`, onClick: () => handleTabClick(4), style: { cursor: 'pointer' }},
                           "Members"
                         ),
                         React.createElement(
                           "li",
-                          {className: step === 5 ? 'bc active' : 'bc', onClick: () => handleTabClick(5), style: { cursor: 'pointer' }},
+                          {className: `bc ${step === 5 ? 'active' : step > 5 ? 'prevActive' : ''}`, onClick: () => handleTabClick(5), style: { cursor: 'pointer' }},
                           "Monitor"
                         )
                       )
@@ -1530,7 +1575,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
 })();
 
 ; (function () {
-    const EditLBModal = ({ lb, networkId, onClose, onUpdated }) => {
+    const EditLBModal = ({ lb, networkId, options, onClose, onUpdated }) => {
         const Api = window.Octavia.api;
         const { Field, Badge, useAsync } = window.Octavia;
         const { Step2_Listener, Step3_Pool, Step4_Members, Step5_Monitor } = window.Octavia.Steps;
@@ -1620,7 +1665,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
         return (
             React.createElement(
               "div",
-              {className: "modal fade in", style: { display: 'block', overflow: 'auto' }},
+              {className: "modal fade in", style: { display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', overflowY: 'auto' }},
               React.createElement(
                 "div",
                 {className: "modal-dialog modal-lg"},
@@ -1632,7 +1677,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                     {className: "modal-header"},
                     React.createElement(
                       "button",
-                      {type: "button", className: "close", onClick: onClose, "data-dismiss": "modal", "aria-label": "Close"},
+                      {type: "button", className: "close", onClick: onClose, "aria-label": "Close", "data-dismiss": "modal"},
                       React.createElement(
                         "span",
                         {"aria-hidden": "true"},
@@ -1658,29 +1703,30 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                   ),
                   React.createElement(
                     "div",
-                    {className: "modal-body", style: { padding: 0 }},
+                    {className: "modal-body"},
                     React.createElement(
                       "div",
-                      {className: "tab-container"},
+                      {className: "wizard", style: { marginBottom: 20 }},
                       React.createElement(
                         "ul",
-                        {className: "nav nav-tabs", style: { paddingLeft: 20, paddingTop: 10 }},
-                        editTabs.map((t, i) => (
-                                        React.createElement(
-                                          "li",
-                                          {key: t.key, className: tab === t.key ? 'active' : ''},
-                                          React.createElement(
-                                            "a",
-                                            {href: "#", onClick: (e) => { e.preventDefault(); setTab(t.key); }},
-                                            t.title
-                                          )
-                                        )
-                                    ))
-                      ),
-                      React.createElement(
-                        "div",
-                        {className: "tab-content", style: { padding: 20 }},
-                        loading ? React.createElement(
+                        {className: "breadcrumbs", style: { paddingLeft: 0, margin: 0 }},
+                        editTabs.map((t, index) => {
+                                        const currentIdx = editTabs.findIndex(et => et.key === tab);
+                                        const liClass = `bc ${tab === t.key ? 'active' : index < currentIdx ? 'prevActive' : ''}`;
+                                        return (
+                                            React.createElement(
+                                              "li",
+                                              {key: t.key, className: liClass, onClick: () => setTab(t.key), style: { cursor: 'pointer' }},
+                                              t.title
+                                            )
+                                        );
+                                    })
+                      )
+                    ),
+                    React.createElement(
+                      "div",
+                      {className: "tab-content", style: { padding: '10px 0' }},
+                      loading ? React.createElement(
             "div",
             {style: { textAlign: 'center', padding: 40 }},
             React.createElement(
@@ -1694,6 +1740,34 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                                                                                                                            tab === 'general' && React.createElement(
                        "div",
                        {className: "form-horizontal"},
+                       React.createElement(
+                         "div",
+                         {className: "row"},
+                         React.createElement(
+                           "div",
+                           {className: "col-md-6"},
+                           React.createElement(
+                             Field,
+                             {label: "Cloud"},
+                             React.createElement(
+                               "input",
+                               {className: "form-control", value: options?.optionClouds?.[0]?.name || options?.cloud?.name || data?.cloud?.name || 'None', readOnly: true, disabled: true}
+                             )
+                           )
+                         ),
+                         React.createElement(
+                           "div",
+                           {className: "col-md-6"},
+                           React.createElement(
+                             Field,
+                             {label: "Resource Pool"},
+                             React.createElement(
+                               "input",
+                               {className: "form-control", value: options?.optionResourcePools?.[0]?.name || 'None', readOnly: true, disabled: true}
+                             )
+                           )
+                         )
+                       ),
                        React.createElement(
                          Field,
                          {label: "Name"},
@@ -1762,7 +1836,6 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                        {data: data, update: update}
                      )
                                                                                                                          )
-                      )
                     )
                   ),
                   React.createElement(
@@ -1770,20 +1843,16 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                     {className: "modal-footer"},
                     React.createElement(
                       "button",
-                      {className: "btn btn-link", onClick: onClose},
+                      {className: "btn btn-default", onClick: onClose},
                       "Cancel"
                     ),
                     React.createElement(
                       "button",
-                      {className: "btn btn-primary", onClick: save, disabled: saving || loading},
+                      {className: "btn btn-success", onClick: save, disabled: saving || loading},
                       saving ? 'Saving...' : 'Save Changes'
                     )
                   )
                 )
-              ),
-              React.createElement(
-                "div",
-                {className: "modal-backdrop fade in"}
               )
             )
         );
@@ -1798,66 +1867,59 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
         const { Badge, useAsync, Toast } = window.Octavia;
 
         const [view, setView] = React.useState('list');
-        const [activeTab, setActiveTab] = React.useState('lbs');
         const [selectedLb, setSelectedLb] = React.useState(null);
         const [toast, setToast] = React.useState(null);
 
-        const optionsState = useAsync(() => Api.listOptions(networkId), [networkId]);
-        const lbState = useAsync(() => Api.listLoadBalancers({ networkId }), [networkId, toast]);
+        const showWizard = view === 'create';
+        const showEdit = view === 'edit';
 
+        const [options, setOptions] = React.useState({});
+        const [subnets, setSubnets] = React.useState([]);
         const [deleteTarget, setDeleteTarget] = React.useState(null);
         const [deleting, setDeleting] = React.useState(false);
-        const [subnets, setSubnets] = React.useState([]);
 
-        const showWizard = view === 'create';
+        const lbState = useAsync(() => Api.listLoadBalancers({ networkId }), [networkId, toast]);
 
-        // Fetch subnets when wizard is opened
+        // Fetch options independently when wizard is opened
         React.useEffect(() => {
-            if (showWizard) {
+            if (showWizard || showEdit) {
+                const ctx = { networkId };
+
                 Api.getSubnets(networkId).then(res => {
                     const mapped = (res?.data || []).map(s => ({ name: s.name, value: s.value, cidr: s.cidr }));
                     setSubnets(mapped);
                 }).catch(e => console.error("Error fetching subnets:", e));
+
+                Api.getProjects(ctx).then(res => {
+                    setOptions(o => ({ ...o, optionProjects: res.data || [], optionClouds: res.optionClouds || [], optionResourcePools: res.resourcePools || [] }));
+                }).catch(e => console.error(e));
+
+                Api.getInstances(ctx).then(res => {
+                    setOptions(o => ({ ...o, instances: res.data || [] }));
+                }).catch(e => console.error(e));
+
+                Api.getFloatingIpPools(ctx).then(res => {
+                    setOptions(o => ({ ...o, optionFloatingIpPools: res.data || [] }));
+                }).catch(e => console.error(e));
             }
-        }, [showWizard, networkId]);
+        }, [showWizard, showEdit, networkId]);
 
         if (lbState.error) return React.createElement(
                                     "div",
                                     {className: "alert alert-danger"},
                                     lbState.error.message
                                   );
-        if (lbState.loading || optionsState.loading) return React.createElement(
-                                                              "div",
-                                                              {style: { padding: 20 }},
-                                                              React.createElement(
-                                                                "i",
-                                                                {className: "fa fa-spinner fa-spin"}
-                                                              ),
-                                                              " Loading..."
-                                                            );
+        if (lbState.loading) return React.createElement(
+                                      "div",
+                                      {style: { padding: 20 }},
+                                      React.createElement(
+                                        "i",
+                                        {className: "fa fa-spinner fa-spin"}
+                                      ),
+                                      " Loading..."
+                                    );
 
         const lbs = lbState.data.loadbalancers || [];
-        const options = optionsState.data || {};
-
-        // Flatten sub-resources from LBs for the tabs
-        const allListeners = lbs.flatMap(lb => (lb.listeners || []).map(l => ({ ...l, lbName: lb.name })));
-        const allPools = lbs.flatMap(lb => (lb.pools || []).map(p => ({ ...p, lbName: lb.name })));
-
-        let allMembers = [];
-        allPools.forEach(p => {
-            if (p.members) {
-                p.members.forEach(m => allMembers.push({ ...m, poolName: p.name, lbName: p.lbName }));
-            }
-        });
-
-        // Monitors are attached to pools in Octavia API (healthmonitor_id)
-        // Usually the LB fetch doesn't populate full monitor details unless expanded.
-        const allMonitors = [];
-        allPools.forEach(p => {
-            if (p.healthmonitor_id) {
-                allMonitors.push({ id: p.healthmonitor_id, poolName: p.name, lbName: p.lbName });
-            }
-        });
 
         const handleDelete = () => {
             setDeleting(true);
@@ -1868,8 +1930,6 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
             });
         };
 
-        // Need to re-fetch helpers if they are not in scope?
-        // CreateWizard and EditLBModal are attached to window.Octavia.
         const CreateWizardComp = window.Octavia.CreateWizard;
         const EditLBModalComp = window.Octavia.EditLBModal;
         const DeleteConfirmModalComp = window.Octavia.DeleteConfirmModal;
@@ -1877,7 +1937,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
         return (
             React.createElement(
               "div",
-              {style: { padding: '0' }},
+              null,
               toast && React.createElement(
            Toast,
            {msg: toast.msg, type: toast.type, onClose: () => setToast(null)}
@@ -1888,67 +1948,16 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                 ),
               view === 'create' && React.createElement(
                        CreateWizardComp,
-                       {networkId: networkId, options: { ...options, subnets }, onClose: () => setView('list'), onCreated: () => { setView('list'); setToast({ msg: 'Load Balancer created.', type: 'success' }); }}
+                       {networkId: networkId, options: { ...options, subnets }, onClose: () => setView('list'), onCreated: () => { setView('list'); }}
                      ),
               view === 'edit' && selectedLb && React.createElement(
                                    EditLBModalComp,
-                                   {lb: selectedLb, networkId: networkId, onClose: () => { setSelectedLb(null); setView('list'); }, onUpdated: () => { setSelectedLb(null); setView('list'); setToast({ msg: 'Load Balancer updated.', type: 'success' }); }}
+                                   {lb: selectedLb, networkId: networkId, options: { ...options, subnets }, onClose: () => { setSelectedLb(null); setView('list'); }, onUpdated: () => { setSelectedLb(null); setView('list'); }}
                                  ),
               view === 'list' && (
                     React.createElement(
-                      "ul",
-                      {className: "nav nav-tabs", style: { marginBottom: '15px' }},
-                      React.createElement(
-                        "li",
-                        {className: activeTab === 'lbs' ? 'active' : ''},
-                        React.createElement(
-                          "a",
-                          {href: "#", onClick: (e) => { e.preventDefault(); setActiveTab('lbs'); }},
-                          "Load Balancers"
-                        )
-                      ),
-                      React.createElement(
-                        "li",
-                        {className: activeTab === 'listeners' ? 'active' : ''},
-                        React.createElement(
-                          "a",
-                          {href: "#", onClick: (e) => { e.preventDefault(); setActiveTab('listeners'); }},
-                          "Listeners"
-                        )
-                      ),
-                      React.createElement(
-                        "li",
-                        {className: activeTab === 'pools' ? 'active' : ''},
-                        React.createElement(
-                          "a",
-                          {href: "#", onClick: (e) => { e.preventDefault(); setActiveTab('pools'); }},
-                          "Pools"
-                        )
-                      ),
-                      React.createElement(
-                        "li",
-                        {className: activeTab === 'members' ? 'active' : ''},
-                        React.createElement(
-                          "a",
-                          {href: "#", onClick: (e) => { e.preventDefault(); setActiveTab('members'); }},
-                          "Members"
-                        )
-                      ),
-                      React.createElement(
-                        "li",
-                        {className: activeTab === 'monitors' ? 'active' : ''},
-                        React.createElement(
-                          "a",
-                          {href: "#", onClick: (e) => { e.preventDefault(); setActiveTab('monitors'); }},
-                          "Monitors"
-                        )
-                      )
-                    )
-                ),
-              view === 'list' && (
-                    React.createElement(
                       "div",
-                      {style: { display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 15, padding: '0 5px' }},
+                      {style: { display: 'flex', justifyContent: 'flex-end', marginBottom: '15px' }},
                       React.createElement(
                         "button",
                         {className: "btn btn-primary", onClick: () => setView('create')},
@@ -1956,10 +1965,10 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                       )
                     )
                 ),
-              view === 'list' && activeTab === 'lbs' && (
+              view === 'list' && (
                     React.createElement(
                       "table",
-                      {className: "table table-striped table-hover"},
+                      {className: "table"},
                       React.createElement(
                         "thead",
                         null,
@@ -1969,7 +1978,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                           React.createElement(
                             "th",
                             null,
-                            "Name"
+                            "NAME"
                           ),
                           React.createElement(
                             "th",
@@ -1979,16 +1988,12 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                           React.createElement(
                             "th",
                             null,
-                            "Status"
+                            "STATUS"
                           ),
                           React.createElement(
                             "th",
                             null,
-                            "Members"
-                          ),
-                          React.createElement(
-                            "th",
-                            null
+                            "MEMBERS"
                           )
                         )
                       ),
@@ -2021,26 +2026,6 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                                     "td",
                                     null,
                                     (lb.members || []).length
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    {style: { textAlign: 'right', whiteSpace: 'nowrap' }},
-                                    React.createElement(
-                                      "button",
-                                      {className: "btn btn-link btn-sm", title: "Edit", onClick: () => { setSelectedLb(lb); setView('edit'); }},
-                                      React.createElement(
-                                        "i",
-                                        {className: "fa fa-pencil", style: { fontSize: '1.2em' }}
-                                      )
-                                    ),
-                                    React.createElement(
-                                      "button",
-                                      {className: "btn btn-link btn-sm", title: "Delete", onClick: () => setDeleteTarget(lb)},
-                                      React.createElement(
-                                        "i",
-                                        {className: "fa fa-trash", style: { fontSize: '1.2em' }}
-                                      )
-                                    )
                                   )
                                 )
                             )),
@@ -2050,372 +2035,11 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                                   null,
                                   React.createElement(
                                     "td",
-                                    {colSpan: "5", style: { textAlign: 'center', padding: 40, color: '#999' }},
-                                    "No Load Balancers found. Click \"ADD\" to create one."
+                                    {colSpan: "4", className: "text-center text-muted", style: { padding: '40px 0' }},
+                                    "No Load Balancers found. Click \"+ ADD\" to create one."
                                   )
                                 )
                             )
-                      )
-                    )
-                ),
-              view === 'list' && activeTab === 'listeners' && (
-                    React.createElement(
-                      "table",
-                      {className: "table table-striped table-hover"},
-                      React.createElement(
-                        "thead",
-                        null,
-                        React.createElement(
-                          "tr",
-                          null,
-                          React.createElement(
-                            "th",
-                            null,
-                            "Name"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Protocol"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Port"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Default Pool"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Status"
-                          ),
-                          React.createElement(
-                            "th",
-                            null
-                          )
-                        )
-                      ),
-                      React.createElement(
-                        "tbody",
-                        null,
-                        allListeners.map(l => (
-                                React.createElement(
-                                  "tr",
-                                  {key: l.id},
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    l.name || l.id
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    l.protocol
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    l.protocol_port
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    l.default_pool_id ? 'Yes' : 'No'
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    React.createElement(
-                                      Badge,
-                                      {text: l.provisioning_status, tone: l.provisioning_status === 'ACTIVE' ? 'success' : 'warning'}
-                                    )
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    React.createElement(
-                                      "span",
-                                      {className: "text-muted text-sm px-2"},
-                                      "(",
-                                      l.lbName,
-                                      ")"
-                                    )
-                                  )
-                                )
-                            )),
-                        allListeners.length === 0 && React.createElement(
-                               "tr",
-                               null,
-                               React.createElement(
-                                 "td",
-                                 {colSpan: "6", style: { textAlign: 'center', padding: 40, color: '#999' }},
-                                 "No Listeners found attached to these Load Balancers."
-                               )
-                             )
-                      )
-                    )
-                ),
-              view === 'list' && activeTab === 'pools' && (
-                    React.createElement(
-                      "table",
-                      {className: "table table-striped table-hover"},
-                      React.createElement(
-                        "thead",
-                        null,
-                        React.createElement(
-                          "tr",
-                          null,
-                          React.createElement(
-                            "th",
-                            null,
-                            "Name"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Protocol"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Algorithm"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Members"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Status"
-                          ),
-                          React.createElement(
-                            "th",
-                            null
-                          )
-                        )
-                      ),
-                      React.createElement(
-                        "tbody",
-                        null,
-                        allPools.map(p => (
-                                React.createElement(
-                                  "tr",
-                                  {key: p.id},
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    p.name || p.id
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    p.protocol
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    p.lb_algorithm
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    (p.members || []).length
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    React.createElement(
-                                      Badge,
-                                      {text: p.provisioning_status, tone: p.provisioning_status === 'ACTIVE' ? 'success' : 'warning'}
-                                    )
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    React.createElement(
-                                      "span",
-                                      {className: "text-muted text-sm px-2"},
-                                      "(",
-                                      p.lbName,
-                                      ")"
-                                    )
-                                  )
-                                )
-                            )),
-                        allPools.length === 0 && React.createElement(
-                           "tr",
-                           null,
-                           React.createElement(
-                             "td",
-                             {colSpan: "6", style: { textAlign: 'center', padding: 40, color: '#999' }},
-                             "No Pools found attached to these Load Balancers."
-                           )
-                         )
-                      )
-                    )
-                ),
-              view === 'list' && activeTab === 'members' && (
-                    React.createElement(
-                      "table",
-                      {className: "table table-striped table-hover"},
-                      React.createElement(
-                        "thead",
-                        null,
-                        React.createElement(
-                          "tr",
-                          null,
-                          React.createElement(
-                            "th",
-                            null,
-                            "Name"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Address / Port"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Weight"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Pool"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Status"
-                          ),
-                          React.createElement(
-                            "th",
-                            null
-                          )
-                        )
-                      ),
-                      React.createElement(
-                        "tbody",
-                        null,
-                        allMembers.map(m => (
-                                React.createElement(
-                                  "tr",
-                                  {key: m.id},
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    m.name || m.id
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    m.address,
-                                    ":",
-                                    m.protocol_port
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    m.weight
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    m.poolName
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    React.createElement(
-                                      Badge,
-                                      {text: m.provisioning_status, tone: m.provisioning_status === 'ACTIVE' ? 'success' : 'warning'}
-                                    )
-                                  ),
-                                  React.createElement(
-                                    "td",
-                                    null,
-                                    React.createElement(
-                                      "span",
-                                      {className: "text-muted text-sm px-2"},
-                                      "(",
-                                      m.lbName,
-                                      ")"
-                                    )
-                                  )
-                                )
-                            )),
-                        allMembers.length === 0 && React.createElement(
-                             "tr",
-                             null,
-                             React.createElement(
-                               "td",
-                               {colSpan: "6", style: { textAlign: 'center', padding: 40, color: '#999' }},
-                               "No Members found in any Pools."
-                             )
-                           )
-                      )
-                    )
-                ),
-              view === 'list' && activeTab === 'monitors' && (
-                    React.createElement(
-                      "table",
-                      {className: "table table-striped table-hover"},
-                      React.createElement(
-                        "thead",
-                        null,
-                        React.createElement(
-                          "tr",
-                          null,
-                          React.createElement(
-                            "th",
-                            null,
-                            "Name"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Type"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Delay/Timeout"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Pool"
-                          ),
-                          React.createElement(
-                            "th",
-                            null,
-                            "Status"
-                          ),
-                          React.createElement(
-                            "th",
-                            null
-                          )
-                        )
-                      ),
-                      React.createElement(
-                        "tbody",
-                        null,
-                        React.createElement(
-                          "tr",
-                          null,
-                          React.createElement(
-                            "td",
-                            {colSpan: "6", style: { textAlign: 'center', padding: 40, color: '#999' }},
-                            "Monitors are connected to Pools."
-                          )
-                        )
                       )
                     )
                 )

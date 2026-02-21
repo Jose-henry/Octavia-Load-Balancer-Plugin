@@ -98,15 +98,9 @@ window.Octavia = window.Octavia || {};
                 return apiFetch(`${baseUrl}/loadbalancersDelete`, { method: 'POST', body: JSON.stringify({ lbId, networkId }) });
             },
 
-            listOptions: (networkId, instanceId) => {
-                const ctx = { networkId, instanceId };
-                return Promise.all([
-                    apiFetch(withContext(`${baseUrl}/optionProjects`, ctx)).then(res => ({ optionProjects: res.data || [] })),
-                    apiFetch(withContext(`${baseUrl}/optionSubnets`, ctx)).then(res => ({ optionSubnets: res.data || [] })),
-                    apiFetch(withContext(`${baseUrl}/optionInstances`, ctx)).then(res => ({ optionInstances: res.data || [] })),
-                    apiFetch(withContext(`${baseUrl}/optionFloatingIpPools`, ctx)).then(res => ({ optionFloatingIpPools: res.data || [] }))
-                ]).then(results => results.reduce((acc, curr) => ({ ...acc, ...curr }), {}));
-            },
+            getProjects: (ctx) => apiFetch(withContext(`${baseUrl}/optionProjects`, ctx)),
+            getInstances: (ctx) => apiFetch(withContext(`${baseUrl}/optionInstances`, ctx)),
+            getFloatingIpPools: (ctx) => apiFetch(withContext(`${baseUrl}/optionFloatingIpPools`, ctx)),
 
             // Helpers for Edit Modal
             listListeners: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx))

@@ -77,6 +77,94 @@ When `Route.build()` requires a specific plugin permission (e.g., `Permission.bu
 
 ---
 
+## 4. Route URL Must Include `/plugin/` Prefix
+
+**Error:** Routes register successfully (confirmed in server logs) but all API calls return 404.
+
+**Context:** The Dispatcher logs showed `"getRoutes - Adding plugin controller routes"` with all route URLs listed. The routes were defined as `/octavia1234/loadbalancers` without the `/plugin/` prefix, but the browser sends requests to `/plugin/octavia1234/loadbalancers`.
+**Root Cause:**
+The Morpheus Dispatcher matches against the **full browser URL path**, NOT a stripped/normalized version. If the browser sends `/plugin/octavia1234/loadbalancers`, the Route URL in `getRoutes()` must be exactly `/plugin/octavia1234/loadbalancers`.
+
+**The Solution:**
+```groovy
+@Override
+List<Route> getRoutes() {
+    def perm = Permission.build("infrastructure-networks", "full")
+    return [
+        // CORRECT — include /plugin/ prefix to match full browser URL
+        Route.build("/plugin/octavia1234/loadbalancers", "loadbalancers", perm)
+
+        // WRONG — Dispatcher does NOT strip /plugin/ when matching
+        // Route.build("/octavia1234/loadbalancers", "loadbalancers", perm)
+    ]
+}
+```
+
+---
+
+## 5. PluginController Must Implement All PluginProvider Methods
+
+**Error:** Controller constructor succeeds but routes still 404.
+
+**Context:** `PluginController` extends `PluginProvider`, which requires `getCode()`, `getName()`, `getMorpheus()`, and `getPlugin()`. Missing these methods can cause the Dispatcher to fail silently.
+
+**The Solution:**
+```groovy
+class OctaviaController implements PluginController {
+    Plugin plugin
+    MorpheusContext morpheusContext
+
+    // ALL FOUR are required:
+    @Override String getCode() { 'octavia-controller' }
+    @Override String getName() { 'Octavia Controller' }
+    @Override MorpheusContext getMorpheus() { morpheusContext }
+    @Override Plugin getPlugin() { plugin }
+}
+```
+
+---
+
+---
+
+## 6. OpenStack Keystone SSL Certificate Validation (PKIX Errors)
+
+**Error:** `PKIX path building failed: sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target`
+
+**Context:** The plugin attempts to authenticate with internal OpenStack APIs (like Keystone or Octavia) which frequently use self-signed certificates or internal corporate Certificate Authorities that are not trusted by the default Java keystore on the Morpheus appliance.
+
+**Root Cause:**
+Standard Apache `HttpClients.createDefault()` strictly validates SSL certificates. If the trust chain cannot be verified against standard public CAs, it throws a fatal `SSLHandshakeException`.
+
+**The Solution:**
+For internal plugins integrating with OpenStack, you must create a custom `CloseableHttpClient` that intentionally trusts all certificates and bypasses host verification:
+
+```groovy
+import org.apache.http.impl.client.CloseableHttpClient
+import org.apache.http.impl.client.HttpClients
+import org.apache.http.conn.ssl.NoopHostnameVerifier
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory
+import org.apache.http.ssl.SSLContexts
+import org.apache.http.ssl.TrustStrategy
+import java.security.cert.X509Certificate
+import javax.net.ssl.SSLContext
+
+private CloseableHttpClient createInsecureHttpClient() {
+    TrustStrategy acceptingTrustStrategy = new TrustStrategy() {
+        @Override
+        boolean isTrusted(X509Certificate[] chain, String authType) {
+            return true
+        }
+    }
+    SSLContext sslContext = SSLContexts.custom()
+            .loadTrustMaterial(null, acceptingTrustStrategy)
+            .build()
+    SSLConnectionSocketFactory csf = new SSLConnectionSocketFactory(sslContext, NoopHostnameVerifier.INSTANCE)
+    return HttpClients.custom().setSSLSocketFactory(csf).build()
+}
+```
+
+---
+
 ## Summary: Architecture for Custom Plugin UI and API Data
 
 When building a custom Web UI React App inside a Morpheus Plugin, follow this complete architecture stack:

@@ -14,7 +14,9 @@
             createMonitor: true,
             listenerProtocol: 'HTTP', listenerPort: 80,
             poolProtocol: 'HTTP', poolAlgorithm: 'ROUND_ROBIN',
-            monitorType: 'HTTP', members: []
+            monitorType: 'HTTP', members: [],
+            delay: 5, timeout: 5, maxRetries: 3, maxRetriesDown: 3,
+            httpMethod: 'GET', expectedCodes: '200', urlPath: '/'
         });
         const [loading, setLoading] = React.useState(false);
 
@@ -181,30 +183,30 @@
                       {className: "wizard", style: { marginBottom: 20 }},
                       React.createElement(
                         "ul",
-                        {className: "breadcrumbs"},
+                        {className: "breadcrumbs", style: { paddingLeft: 0, margin: 0 }},
                         React.createElement(
                           "li",
-                          {className: step === 1 ? 'bc active' : 'bc', onClick: () => handleTabClick(1), style: { cursor: 'pointer' }},
+                          {className: `bc ${step === 1 ? 'active' : step > 1 ? 'prevActive' : ''}`, onClick: () => handleTabClick(1), style: { cursor: 'pointer' }},
                           "Details"
                         ),
                         React.createElement(
                           "li",
-                          {className: step === 2 ? 'bc active' : 'bc', onClick: () => handleTabClick(2), style: { cursor: 'pointer' }},
+                          {className: `bc ${step === 2 ? 'active' : step > 2 ? 'prevActive' : ''}`, onClick: () => handleTabClick(2), style: { cursor: 'pointer' }},
                           "Listener"
                         ),
                         React.createElement(
                           "li",
-                          {className: step === 3 ? 'bc active' : 'bc', onClick: () => handleTabClick(3), style: { cursor: 'pointer' }},
+                          {className: `bc ${step === 3 ? 'active' : step > 3 ? 'prevActive' : ''}`, onClick: () => handleTabClick(3), style: { cursor: 'pointer' }},
                           "Pool"
                         ),
                         React.createElement(
                           "li",
-                          {className: step === 4 ? 'bc active' : 'bc', onClick: () => handleTabClick(4), style: { cursor: 'pointer' }},
+                          {className: `bc ${step === 4 ? 'active' : step > 4 ? 'prevActive' : ''}`, onClick: () => handleTabClick(4), style: { cursor: 'pointer' }},
                           "Members"
                         ),
                         React.createElement(
                           "li",
-                          {className: step === 5 ? 'bc active' : 'bc', onClick: () => handleTabClick(5), style: { cursor: 'pointer' }},
+                          {className: `bc ${step === 5 ? 'active' : step > 5 ? 'prevActive' : ''}`, onClick: () => handleTabClick(5), style: { cursor: 'pointer' }},
                           "Monitor"
                         )
                       )

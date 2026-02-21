@@ -1,5 +1,5 @@
 ; (function () {
-    const EditLBModal = ({ lb, networkId, onClose, onUpdated }) => {
+    const EditLBModal = ({ lb, networkId, options, onClose, onUpdated }) => {
         const Api = window.Octavia.api;
         const { Field, Badge, useAsync } = window.Octavia;
         const { Step2_Listener, Step3_Pool, Step4_Members, Step5_Monitor } = window.Octavia.Steps;
@@ -89,7 +89,7 @@
         return (
             React.createElement(
               "div",
-              {className: "modal fade in", style: { display: 'block', overflow: 'auto' }},
+              {className: "modal fade in", style: { display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', overflowY: 'auto' }},
               React.createElement(
                 "div",
                 {className: "modal-dialog modal-lg"},
@@ -101,7 +101,7 @@
                     {className: "modal-header"},
                     React.createElement(
                       "button",
-                      {type: "button", className: "close", onClick: onClose, "data-dismiss": "modal", "aria-label": "Close"},
+                      {type: "button", className: "close", onClick: onClose, "aria-label": "Close", "data-dismiss": "modal"},
                       React.createElement(
                         "span",
                         {"aria-hidden": "true"},
@@ -127,29 +127,30 @@
                   ),
                   React.createElement(
                     "div",
-                    {className: "modal-body", style: { padding: 0 }},
+                    {className: "modal-body"},
                     React.createElement(
                       "div",
-                      {className: "tab-container"},
+                      {className: "wizard", style: { marginBottom: 20 }},
                       React.createElement(
                         "ul",
-                        {className: "nav nav-tabs", style: { paddingLeft: 20, paddingTop: 10 }},
-                        editTabs.map((t, i) => (
-                                        React.createElement(
-                                          "li",
-                                          {key: t.key, className: tab === t.key ? 'active' : ''},
-                                          React.createElement(
-                                            "a",
-                                            {href: "#", onClick: (e) => { e.preventDefault(); setTab(t.key); }},
-                                            t.title
-                                          )
-                                        )
-                                    ))
-                      ),
-                      React.createElement(
-                        "div",
-                        {className: "tab-content", style: { padding: 20 }},
-                        loading ? React.createElement(
+                        {className: "breadcrumbs", style: { paddingLeft: 0, margin: 0 }},
+                        editTabs.map((t, index) => {
+                                        const currentIdx = editTabs.findIndex(et => et.key === tab);
+                                        const liClass = `bc ${tab === t.key ? 'active' : index < currentIdx ? 'prevActive' : ''}`;
+                                        return (
+                                            React.createElement(
+                                              "li",
+                                              {key: t.key, className: liClass, onClick: () => setTab(t.key), style: { cursor: 'pointer' }},
+                                              t.title
+                                            )
+                                        );
+                                    })
+                      )
+                    ),
+                    React.createElement(
+                      "div",
+                      {className: "tab-content", style: { padding: '10px 0' }},
+                      loading ? React.createElement(
             "div",
             {style: { textAlign: 'center', padding: 40 }},
             React.createElement(
@@ -163,6 +164,34 @@
                                                                                                                            tab === 'general' && React.createElement(
                        "div",
                        {className: "form-horizontal"},
+                       React.createElement(
+                         "div",
+                         {className: "row"},
+                         React.createElement(
+                           "div",
+                           {className: "col-md-6"},
+                           React.createElement(
+                             Field,
+                             {label: "Cloud"},
+                             React.createElement(
+                               "input",
+                               {className: "form-control", value: options?.optionClouds?.[0]?.name || options?.cloud?.name || data?.cloud?.name || 'None', readOnly: true, disabled: true}
+                             )
+                           )
+                         ),
+                         React.createElement(
+                           "div",
+                           {className: "col-md-6"},
+                           React.createElement(
+                             Field,
+                             {label: "Resource Pool"},
+                             React.createElement(
+                               "input",
+                               {className: "form-control", value: options?.optionResourcePools?.[0]?.name || 'None', readOnly: true, disabled: true}
+                             )
+                           )
+                         )
+                       ),
                        React.createElement(
                          Field,
                          {label: "Name"},
@@ -231,7 +260,6 @@
                        {data: data, update: update}
                      )
                                                                                                                          )
-                      )
                     )
                   ),
                   React.createElement(
@@ -239,20 +267,16 @@
                     {className: "modal-footer"},
                     React.createElement(
                       "button",
-                      {className: "btn btn-link", onClick: onClose},
+                      {className: "btn btn-default", onClick: onClose},
                       "Cancel"
                     ),
                     React.createElement(
                       "button",
-                      {className: "btn btn-primary", onClick: save, disabled: saving || loading},
+                      {className: "btn btn-success", onClick: save, disabled: saving || loading},
                       saving ? 'Saving...' : 'Save Changes'
                     )
                   )
                 )
-              ),
-              React.createElement(
-                "div",
-                {className: "modal-backdrop fade in"}
               )
             )
         );

@@ -23,19 +23,96 @@ class MorpheusLookupService {
     }
 
     /**
-     * Basic context info for a network.
+     * Basic context info for a network. Fetches Cloud via refId, Owner (account), and Subnets using explicit getters.
      */
     Map getNetworkContext(Long networkId) {
         try {
             Network net = morpheus.async.network.get(networkId)?.blockingGet()
-            def cloud = null
-            if (net?.refType == 'ComputeZone' && net?.refId) {
-                cloud = morpheus.async.cloud.getCloudById(net.refId)?.blockingGet()
+            
+            if (!net) {
+                log.warn("Network {} not found", networkId)
+                return [:]
             }
-            // Explicit project property doesn't exist on Network
-            return [network: net, cloud: cloud, project: null]
+            
+            // Resolve Cloud using refType and refId (ComputeZone == Cloud in Morpheus)
+            def cloud = null
+            if (net.getRefType() == 'ComputeZone' && net.getRefId()) {
+                cloud = morpheus.async.cloud.getCloudById(net.getRefId())?.blockingGet()
+                
+                // === DIAGNOSTIC: Fetch Configuration Options and Credentials ===
+                if (cloud) {
+                    try {
+                        // Attempt to load the linked account credentials into the credentialData map
+                        def creds = morpheus.async.cloud.loadCredentials(cloud.id)?.blockingGet()
+                        log.info("  -> Found AccountCredential for cloud (ID: {}): {}", cloud.id, creds?.id)
+                        
+                        Map config = cloud.getConfigMap() ?: [:]
+                        Map credData = cloud.getAccountCredentialData() ?: [:]
+                        
+                        String identityApi = config.get("identityApi")
+                        String computeApi = config.get("computeApi")
+                        String networkApi = config.get("networkApi")
+                        String loadBalancerApi = config.get("loadBalancerApi")
+                        String identityVersion = config.get("identityVersion")
+                        String domainId = config.get("domainId")
+                        String projectName = config.get("projectName") ?: config.get("tenantName")
+                        
+                        String username = credData.get("username") ?: cloud.getServiceUsername()
+                        String password = credData.get("password") ?: (cloud.getServicePassword() ? "*******" : null)
+                        
+                        log.info("  -> === EXTRACTED CLOUD ENDPOINTS & CREDENTIALS ===")
+                        log.info("     - identityApi: {}", identityApi)
+                        log.info("     - computeApi: {}", computeApi)
+                        log.info("     - networkApi: {}", networkApi)
+                        log.info("     - loadBalancerApi: {}", loadBalancerApi)
+                        log.info("     - identityVersion: {}", identityVersion)
+                        log.info("     - domainId: {}", domainId)
+                        log.info("     - projectName (tenant): {}", projectName)
+                        log.info("     - username: {}", username ? "PRESENT" : "MISSING")
+                        log.info("     - password: {}", password ? "PRESENT" : "MISSING")
+                        log.info("  -> ==============================================")
+                        
+                    } catch(Exception credEx) {
+                        log.error("     ! Failed to load/parse credentials for Cloud {}: {}", cloud.id, credEx.message)
+                    }
+                }
+            }
+            
+            // Explicitly fetch nested attributes
+            def project = net.getOwner() // Account owner maps to OpenStack tenant/project
+            def subnets = net.getSubnets() ?: []
+            def cidr = net.getCidr()
+            
+            // Explicitly fetch resource pool (CloudPool) properties
+            def singlePool = net.getCloudPool()
+            def assignedPools = net.getAssignedZonePools() ?: []
+            
+            log.info("Resolved Network '{}' (ID: {}, CIDR: {})", net.getName(), net.getId(), cidr)
+            if (cloud) {
+                log.info("  -> Associated Cloud: '{}' (ID: {}, Code: {})", cloud.getName(), cloud.getId(), cloud.getCode())
+            } else {
+                log.info("  -> Associated Cloud: None found (refType: {}, refId: {})", net.getRefType(), net.getRefId())
+            }
+            if (project) {
+                log.info("  -> Associated Owner/Project: '{}' (ID: {})", project.getName(), project.getId())
+            }
+            if (singlePool) {
+                log.info("  -> Associated Resource Pool (CloudPool): '{}' (ID: {})", singlePool.getName(), singlePool.getId())
+            }
+            if (assignedPools) {
+                log.info("  -> Assigned Zone Pools count: {}", assignedPools.size())
+                assignedPools.each { p ->
+                    log.info("     - Pool: '{}' (ID: {})", p.getName(), p.getId())
+                }
+            }
+            log.info("  -> Associated Subnets count: {}", subnets.size())
+            subnets.each { sub ->
+                log.info("     - Subnet: '{}' (ID: {}, CIDR: {}, Gateway: {})", sub.getName(), sub.getId(), sub.getCidr(), sub.getGateway())
+            }
+
+            return [network: net, cloud: cloud, project: project, subnets: subnets, pool: singlePool, assignedPools: assignedPools]
         } catch (Exception ex) {
-            log.warn("getNetworkContext failed for networkId={}: {}", networkId, ex.message)
+            log.warn("getNetworkContext failed for networkId={}: {}", networkId, ex.message, ex)
             return [:]
         }
     }
@@ -47,14 +124,45 @@ class MorpheusLookupService {
      */
     List<Map> listInstances(Map ctx) {
         try {
-            def account = ctx?.network?.account ?: ctx?.project?.account
-            if (!account) return []
-            
-            def query = new DataQuery().withFilter(new DataFilter("account.id", account.id))
-            def items = morpheus.instance.listIdentityProjections(query).toList().blockingGet()
-            return items.collect { inst ->
-                [name: inst.name ?: "Instance ${inst.id}", value: inst.id?.toString()]
+            def account = ctx?.project
+            if (!account) {
+                log.warn("No project/account found in context to filter instances")
+                return []
             }
+            log.info("Fetching instances for account: {}", account.id)
+            
+            def items = []
+            morpheus.async.instance.listIdentityProjections(new DataQuery().withFilter("account.id", account.id))
+                .flatMapMaybe { projection -> morpheus.async.instance.get(projection.id) }
+                .blockingSubscribe(
+                    { inst -> 
+                        if (inst.containers && !inst.containers.isEmpty()) {
+                            inst.containers.each { container ->
+                                String containerIp = container.internalIp ?: container.externalIp ?: ""
+                                String displayName = inst.containers.size() > 1 ? "${inst.name} - ${container.name ?: 'VM'}" : (inst.name ?: "Instance ${inst.id}")
+                                
+                                if (containerIp) {
+                                    displayName += " (${containerIp})"
+                                }
+                                
+                                log.info("Found VM/Container {} with IP {} for Instance {}", container.name, containerIp, inst.name)
+                                
+                                items << [
+                                    name: displayName, 
+                                    value: container.id?.toString(), // Use the container ID so the UI can look up the specific node
+                                    instanceId: inst.id?.toString(),
+                                    ip: containerIp
+                                ]
+                            }
+                        } else {
+                            log.info("Instance {} ID {} has no containers", inst.name, inst.id)
+                        }
+                    },
+                    { error -> log.warn("Error fetching instance details for listing: {}", error.message) }
+                )
+            
+            log.info("listInstances returning {} VM/Container nodes", items.size())    
+            return items
         } catch (Exception ex) {
             log.warn("listInstances failed: {}", ex.message)
             return []
@@ -68,15 +176,33 @@ class MorpheusLookupService {
         try {
             Network net = morpheus.async.network.get(networkId)?.blockingGet()
             def cloud = null
-            if (net?.refType == 'ComputeZone' && net?.refId) {
-                cloud = morpheus.async.cloud.getCloudById(net.refId)?.blockingGet()
+            if (net?.getRefType() == 'ComputeZone' && net?.getRefId()) {
+                cloud = morpheus.async.cloud.getCloudById(net.getRefId())?.blockingGet()
             }
-            if (!cloud) return []
-            // Async network -> floatingIp -> pool
-            def pools = morpheus.async.network.floatingIp.pool.list(new DataQuery().withFilter("cloud.id", cloud.id))?.toList()?.blockingGet() ?: []
-            return pools.collect { [name: it?.name ?: "Pool ${it?.id}", value: it?.id?.toString()] }
+            if (!cloud) {
+                log.warn("No cloud associated with network {} to list FIP pools", networkId)
+                return []
+            }
+            
+            // FIP Pools are linked polymorphic via refType/refId (ComputeZone)
+            def query = new DataQuery()
+                .withFilter(new DataFilter("refType", "ComputeZone"))
+                .withFilter(new DataFilter("refId", cloud.id))
+            
+            // Using explicit MorpheusNetworkFloatingIpPoolService
+            def pools = morpheus.async.network.floatingIp.pool.list(query).toList().blockingGet()
+            
+            // Fallback: If strict refType filtering yields nothing, try listing all pools for now so UI is unblocked
+            if (!pools) {
+                log.info("Strict refType filter yielded 0 pools, falling back to all floating IP pools")
+                pools = morpheus.async.network.floatingIp.pool.list(new DataQuery()).toList().blockingGet() ?: []
+            }
+            
+            return pools.collect { pool -> 
+                [name: pool.getName() ?: "Pool ${pool.getId()}", value: pool.getId()?.toString()] 
+            }
         } catch (Exception ex) {
-            log.warn("listFloatingIpPools failed: {}", ex.message)
+            log.warn("listFloatingIpPools failed: {}", ex.message, ex)
             return []
         }
     }

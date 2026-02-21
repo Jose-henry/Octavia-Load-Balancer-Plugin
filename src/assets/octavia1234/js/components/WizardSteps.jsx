@@ -2,8 +2,24 @@
     // --- Step 1: Details ---
     const Step1_Details = ({ data, update, options }) => {
         const { Field } = window.Octavia;
+
+        const cloud = options?.optionClouds?.[0]?.name || options?.cloud?.name || data?.cloud?.name || 'None';
+        const resourcePool = options?.optionResourcePools?.[0]?.name || 'None';
+
         return (
             <div className="form-horizontal">
+                <div className="row">
+                    <div className="col-md-6">
+                        <Field label="Cloud">
+                            <input className="form-control" value={cloud} readOnly disabled />
+                        </Field>
+                    </div>
+                    <div className="col-md-6">
+                        <Field label="Resource Pool">
+                            <input className="form-control" value={resourcePool} readOnly disabled />
+                        </Field>
+                    </div>
+                </div>
                 <div className="row">
                     <div className="col-md-6">
                         <Field label="Name" required>
@@ -89,11 +105,15 @@
                         </div>
                     </div>
 
-                    {!hideTimeouts && <div className="row">
-                        <div className="col-md-3"><Field label="Client Data Timeout"><input type="number" className="form-control" value={data.clientDataTimeout || 50000} onChange={e => update('clientDataTimeout', parseInt(e.target.value))} /></Field></div>
-                        <div className="col-md-3"><Field label="TCP Inspect Timeout"><input type="number" className="form-control" value={data.tcpInspectTimeout || 0} onChange={e => update('tcpInspectTimeout', parseInt(e.target.value))} /></Field></div>
-                        <div className="col-md-3"><Field label="Member Connect Timeout"><input type="number" className="form-control" value={data.memberConnectTimeout || 5000} onChange={e => update('memberConnectTimeout', parseInt(e.target.value))} /></Field></div>
-                        <div className="col-md-3"><Field label="Member Data Timeout"><input type="number" className="form-control" value={data.memberDataTimeout || 50000} onChange={e => update('memberDataTimeout', parseInt(e.target.value))} /></Field></div>
+                    {!hideTimeouts && <div>
+                        <div className="row">
+                            <div className="col-md-6"><Field label="Client Data Timeout"><input type="number" className="form-control" value={data.clientDataTimeout || 50000} onChange={e => update('clientDataTimeout', parseInt(e.target.value))} /></Field></div>
+                            <div className="col-md-6"><Field label="TCP Inspect Timeout"><input type="number" className="form-control" value={data.tcpInspectTimeout || 0} onChange={e => update('tcpInspectTimeout', parseInt(e.target.value))} /></Field></div>
+                        </div>
+                        <div className="row">
+                            <div className="col-md-6"><Field label="Member Connect Timeout"><input type="number" className="form-control" value={data.memberConnectTimeout || 5000} onChange={e => update('memberConnectTimeout', parseInt(e.target.value))} /></Field></div>
+                            <div className="col-md-6"><Field label="Member Data Timeout"><input type="number" className="form-control" value={data.memberDataTimeout || 50000} onChange={e => update('memberDataTimeout', parseInt(e.target.value))} /></Field></div>
+                        </div>
                     </div>}
 
                     {showHeaders && <div className="well ml-3">
@@ -283,7 +303,7 @@
                                             <td>{m.port}</td>
                                             <td>{m.weight}</td>
                                             <td><Badge text={m.type || 'INTERNAL'} tone={m.type === 'EXTERNAL' ? 'warning' : 'info'} /></td>
-                                            <td className="text-right"><button className="btn btn-xs" style={{ backgroundColor: '#b00020', color: '#fff', border: 'none', padding: '3px 8px' }} onClick={() => removeMember(m.id)}><i className="fa fa-trash"></i></button></td>
+                                            <td className="text-right"><button className="btn btn-xs" style={{ backgroundColor: '#b00020', color: '#fff', border: 'none', padding: '4px 8px', fontWeight: 'bold' }} onClick={() => removeMember(m.id)}><i className="fa fa-trash"></i> REMOVE</button></td>
                                         </tr>
                                     ))}
                             </tbody>
@@ -327,19 +347,21 @@
 
                     {(data.monitorType === 'HTTP' || data.monitorType === 'HTTPS') && <div>
                         <div className="row">
-                            <div className="col-md-4">
+                            <div className="col-md-6">
                                 <Field label="HTTP Method">
                                     <select className="form-control" value={data.httpMethod || 'GET'} onChange={e => update('httpMethod', e.target.value)}>
                                         {['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'TRACE', 'OPTIONS', 'PATCH', 'CONNECT'].map(m => <option key={m} value={m}>{m}</option>)}
                                     </select>
                                 </Field>
                             </div>
-                            <div className="col-md-4">
+                            <div className="col-md-6">
                                 <Field label="Expected Codes">
                                     <input className="form-control" value={data.expectedCodes || '200'} onChange={e => update('expectedCodes', e.target.value)} placeholder="200, 200-204" />
                                 </Field>
                             </div>
-                            <div className="col-md-4">
+                        </div>
+                        <div className="row">
+                            <div className="col-md-6">
                                 <Field label="URL Path">
                                     <input className="form-control" value={data.urlPath || '/'} onChange={e => update('urlPath', e.target.value)} placeholder="/" />
                                 </Field>
@@ -348,16 +370,18 @@
                     </div>}
 
                     <div className="row">
-                        <div className="col-md-3">
+                        <div className="col-md-6">
                             <Field label="Delay (sec)" required><input type="number" className="form-control" value={data.delay || 5} onChange={e => update('delay', parseInt(e.target.value))} /></Field>
                         </div>
-                        <div className="col-md-3">
+                        <div className="col-md-6">
                             <Field label="Timeout (sec)" required><input type="number" className="form-control" value={data.timeout || 5} onChange={e => update('timeout', parseInt(e.target.value))} /></Field>
                         </div>
-                        <div className="col-md-3">
+                    </div>
+                    <div className="row">
+                        <div className="col-md-6">
                             <Field label="Max Retries" required><input type="number" className="form-control" value={data.maxRetries || 3} onChange={e => update('maxRetries', parseInt(e.target.value))} /></Field>
                         </div>
-                        <div className="col-md-3">
+                        <div className="col-md-6">
                             <Field label="Max Retries Down"><input type="number" className="form-control" value={data.maxRetriesDown || 3} onChange={e => update('maxRetriesDown', parseInt(e.target.value))} /></Field>
                         </div>
                     </div>
