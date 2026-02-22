@@ -55,7 +55,7 @@ class MorpheusLookupService {
                         String loadBalancerApi = config.get("loadBalancerApi")
                         String identityVersion = config.get("identityVersion")
                         String domainId = config.get("domainId")
-                        String projectName = config.get("projectName") ?: config.get("tenantName")
+                        String projectName = config.get("projectName") ?: config.get("tenantName") ?: cloud.getAccount()?.name ?: "UNKNOWN"
                         
                         String username = credData.get("username") ?: cloud.getServiceUsername()
                         String password = credData.get("password") ?: (cloud.getServicePassword() ? "*******" : null)
@@ -138,11 +138,14 @@ class MorpheusLookupService {
                     { inst -> 
                         if (inst.containers && !inst.containers.isEmpty()) {
                             inst.containers.each { container ->
-                                String containerIp = container.internalIp ?: container.externalIp ?: ""
+                                String containerIp = container.internalIp ?: container.externalIp ?: inst.internalIp ?: inst.ipAddress ?: ""
                                 String displayName = inst.containers.size() > 1 ? "${inst.name} - ${container.name ?: 'VM'}" : (inst.name ?: "Instance ${inst.id}")
                                 
                                 if (containerIp) {
                                     displayName += " (${containerIp})"
+                                } else {
+                                    // Fallback if IP is deeply nested or missing
+                                    containerIp = "0.0.0.0" 
                                 }
                                 
                                 log.info("Found VM/Container {} with IP {} for Instance {}", container.name, containerIp, inst.name)

@@ -38,6 +38,10 @@ class OctaviaController implements PluginController {
     private MorpheusLookupService lookupService
     private OctaviaAuthService authService
 
+    // Cache map: "cloudId:tenantName" -> lastSyncTimeMs
+    private static Map<String, Long> lastSyncTimes = [:]
+    private static final long SYNC_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
+
     OctaviaController(Plugin plugin, MorpheusContext morpheusContext) {
         this.plugin = plugin
         this.morpheusContext = morpheusContext
@@ -137,7 +141,14 @@ class OctaviaController implements PluginController {
             if (request) {
                 def body = request.inputStream?.text
                 if (body) {
-                    return new JsonSlurper().parseText(body) as Map
+                    return new groovy.json.JsonSlurper().parseText(body) as Map
+                }
+            }
+            // If body is empty, Morpheus might have already parsed it into the model object properties natively
+            if (model.object instanceof Map) {
+                // Avoid extracting Grails/Spring injected variables
+                return model.object.findAll { k, v -> 
+                    !(k in ['action', 'controller', 'plugin', 'request', 'response', 'flash', 'session', 'morpheusContext']) 
                 }
             }
         } catch (Exception ex) {
@@ -212,11 +223,60 @@ class OctaviaController implements PluginController {
                 return JsonResponse.of([loadbalancers: []])
             }
 
-            def result = lbService.list(cloud, tenantName)
-            return JsonResponse.of(result)
+            // 1. Trigger background sync if 5 minutes have elapsed
+            String cacheKey = "${cloud.id}:${tenantName}"
+            long lastSync = lastSyncTimes[cacheKey] ?: 0
+            if (System.currentTimeMillis() - lastSync > SYNC_INTERVAL_MS) {
+                log.info("Sync interval exceeded for {}. Starting background SyncTask.", cacheKey)
+                lastSyncTimes[cacheKey] = System.currentTimeMillis()
+                Thread.start {
+                    try {
+                        def apiResult = lbService.list(cloud, tenantName)
+                        def apiList = apiResult.success ? (apiResult.data ?: []) : []
+                        new OctaviaLoadBalancerSync(morpheusContext, cloud, tenantName).execute(apiList)
+                    } catch (Exception e) {
+                        log.error("Background sync failed for ${cacheKey}", e)
+                        lastSyncTimes.remove(cacheKey) // allow retry on next refresh
+                    }
+                }
+            }
+
+            // 2. Instantly fetch the cached list from Morpheus DB
+            def query = new com.morpheusdata.core.data.DataQuery()
+                .withFilter('cloud.id', cloud.id)
+                .withFilter('internalId', tenantName)
+            
+            def dbLbs = morpheusContext.async.loadBalancer.list(query).toList().blockingGet()
+
+            // 3. Map DB entities back to the Octavia JSON format expected by the React UI
+            def mappedLbs = dbLbs.collect { lb ->
+                [
+                    id: lb.externalId,
+                    name: lb.name,
+                    vip_address: lb.ipAddress,
+                    provisioning_status: mapMorpheusStatusToOctavia(lb.status),
+                    description: lb.description,
+                    provider: lb.providerId,
+                    members: [] // Members count will be zero in list view, lazy loaded on Edit
+                ]
+            }
+
+            // Return instantly (< 0.05 seconds)
+            return JsonResponse.of([loadbalancers: mappedLbs])
         } catch (Exception ex) {
             log.error("loadbalancers() failed: {}", ex.message, ex)
             return JsonResponse.of([success: false, error: ex.message])
+        }
+    }
+
+    private String mapMorpheusStatusToOctavia(String morpheusStatus) {
+        switch (morpheusStatus) {
+            case 'ok': return 'ACTIVE'
+            case 'error': return 'ERROR'
+            case 'provisioning': return 'PENDING_CREATE'
+            case 'syncing': return 'PENDING_UPDATE'
+            case 'offline': return 'DELETED'
+            default: return 'UNKNOWN'
         }
     }
 
@@ -244,6 +304,17 @@ class OctaviaController implements PluginController {
             }
 
             def result = lbService.create(cloud, tenantName, payload)
+            if (result.success) {
+                try {
+                    // Synchronously update the Morpheus DB so the UI table immediately shows the new LB
+                    def apiResult = lbService.list(cloud, tenantName)
+                    def apiList = apiResult.success ? (apiResult.data ?: []) : []
+                    new OctaviaLoadBalancerSync(morpheusContext, cloud, tenantName).execute(apiList)
+                } catch (Exception syncEx) {
+                    log.error("Inline sync failed after create: {}", syncEx.message)
+                }
+                lastSyncTimes[("${cloud.id}:${tenantName}".toString())] = System.currentTimeMillis()
+            }
             return JsonResponse.of(result)
         } catch (Exception ex) {
             log.error("loadbalancersCreate() failed: {}", ex.message, ex)
@@ -276,6 +347,17 @@ class OctaviaController implements PluginController {
             }
 
             def result = lbService.delete(cloud, tenantName, lbId)
+            if (result.success) {
+                try {
+                    // Synchronously update the Morpheus DB so the UI table immediately removes the LB
+                    def apiResult = lbService.list(cloud, tenantName)
+                    def apiList = apiResult.success ? (apiResult.data ?: []) : []
+                    new OctaviaLoadBalancerSync(morpheusContext, cloud, tenantName).execute(apiList)
+                } catch (Exception syncEx) {
+                    log.error("Inline sync failed after delete: {}", syncEx.message)
+                }
+                lastSyncTimes[("${cloud.id}:${tenantName}".toString())] = System.currentTimeMillis()
+            }
             return JsonResponse.of(result)
         } catch (Exception ex) {
             log.error("loadbalancersDelete() failed: {}", ex.message, ex)
@@ -346,6 +428,9 @@ class OctaviaController implements PluginController {
             }
 
             def result = lbService.update(cloud, tenantName, lbId, payload)
+            if (result.success) {
+                lastSyncTimes.remove("${cloud.id}:${tenantName}".toString())
+            }
             return JsonResponse.of(result)
         } catch (Exception ex) {
             log.error("loadbalancerUpdate() failed: {}", ex.message, ex)

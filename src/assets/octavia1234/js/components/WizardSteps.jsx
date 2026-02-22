@@ -234,7 +234,7 @@
             const inst = options.instances.find(i => i.value === selectedInst);
             const newMember = {
                 id: inst.value, name: inst.name, type: 'INTERNAL',
-                address: '10.0.0.' + Math.floor(Math.random() * 255), // Mock
+                address: inst.ip || '0.0.0.0', // Real IP from Morpheus options payload
                 port: 80, weight: 1, role: 'member'
             };
             update('members', [...(data.members || []), newMember]);

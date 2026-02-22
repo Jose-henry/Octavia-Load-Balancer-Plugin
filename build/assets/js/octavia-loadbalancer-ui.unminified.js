@@ -791,7 +791,7 @@ window.Octavia = window.Octavia || {};
             const inst = options.instances.find(i => i.value === selectedInst);
             const newMember = {
                 id: inst.value, name: inst.name, type: 'INTERNAL',
-                address: '10.0.0.' + Math.floor(Math.random() * 255), // Mock
+                address: inst.ip || '0.0.0.0', // Real IP from Morpheus options payload
                 port: 80, weight: 1, role: 'member'
             };
             update('members', [...(data.members || []), newMember]);
@@ -1429,13 +1429,17 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
             setValidationMsg('');
             setLoading(true);
             window.Octavia.api.createLoadBalancer(data)
-                .then(() => {
+                .then(res => {
                     setLoading(false);
-                    onCreated();
+                    if (res && res.success === false) {
+                        setValidationMsg('Error: ' + (res.msg || res.error || 'Unknown error occurred'));
+                    } else {
+                        onCreated();
+                    }
                 })
                 .catch(e => {
                     setLoading(false);
-                    setValidationMsg('Error: ' + e.message);
+                    setValidationMsg('Error: ' + (e.message || e.error || 'Network error'));
                 });
         };
 
@@ -1593,6 +1597,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
         const [tab, setTab] = React.useState('general');
         const [data, setData] = React.useState({ ...lb });
         const [saving, setSaving] = React.useState(false);
+        const [validationMsg, setValidationMsg] = React.useState('');
 
         // Load sub-resources
         const { loading, error, data: details } = useAsync(async () => {
@@ -1658,11 +1663,21 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
         const update = (field, val) => setData(prev => ({ ...prev, [field]: val }));
 
         const save = () => {
+            setValidationMsg('');
             setSaving(true);
-            Api.updateLoadBalancer(lb.id, data).then(onUpdated).catch(e => {
-                setSaving(false);
-                alert(e.message);
-            });
+            Api.updateLoadBalancer(lb.id, data)
+                .then(res => {
+                    setSaving(false);
+                    if (res && res.success === false) {
+                        setValidationMsg('Error: ' + (res.msg || res.error || 'Unknown update error'));
+                    } else {
+                        onUpdated();
+                    }
+                })
+                .catch(e => {
+                    setSaving(false);
+                    setValidationMsg('Error: ' + (e.message || e.error || 'Network error'));
+                });
         };
 
         const editTabs = [
@@ -1708,12 +1723,18 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                     React.createElement(
                       "h4",
                       {className: "modal-title"},
-                      "Edit Load Balancer"
+                      "Edit Load Balancer:",
+                      lb.name
                     )
                   ),
                   React.createElement(
                     "div",
                     {className: "modal-body"},
+                    validationMsg && React.createElement(
+                   "div",
+                   {className: "alert alert-danger", style: { padding: '10px 15px', marginBottom: 20 }},
+                   validationMsg
+                 ),
                     React.createElement(
                       "div",
                       {className: "wizard", style: { marginBottom: 20 }},

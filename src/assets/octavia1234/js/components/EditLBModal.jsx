@@ -7,6 +7,7 @@
         const [tab, setTab] = React.useState('general');
         const [data, setData] = React.useState({ ...lb });
         const [saving, setSaving] = React.useState(false);
+        const [validationMsg, setValidationMsg] = React.useState('');
 
         // Load sub-resources
         const { loading, error, data: details } = useAsync(async () => {
@@ -72,11 +73,21 @@
         const update = (field, val) => setData(prev => ({ ...prev, [field]: val }));
 
         const save = () => {
+            setValidationMsg('');
             setSaving(true);
-            Api.updateLoadBalancer(lb.id, data).then(onUpdated).catch(e => {
-                setSaving(false);
-                alert(e.message);
-            });
+            Api.updateLoadBalancer(lb.id, data)
+                .then(res => {
+                    setSaving(false);
+                    if (res && res.success === false) {
+                        setValidationMsg('Error: ' + (res.msg || res.error || 'Unknown update error'));
+                    } else {
+                        onUpdated();
+                    }
+                })
+                .catch(e => {
+                    setSaving(false);
+                    setValidationMsg('Error: ' + (e.message || e.error || 'Network error'));
+                });
         };
 
         const editTabs = [
@@ -99,10 +110,11 @@
                                     </svg>
                                 </span>
                             </button>
-                            <h4 className="modal-title">Edit Load Balancer</h4>
+                            <h4 className="modal-title">Edit Load Balancer: {lb.name}</h4>
                         </div>
 
                         <div className="modal-body">
+                            {validationMsg && <div className="alert alert-danger" style={{ padding: '10px 15px', marginBottom: 20 }}>{validationMsg}</div>}
                             <div className="wizard" style={{ marginBottom: 20 }}>
                                 <ul className="breadcrumbs" style={{ paddingLeft: 0, margin: 0 }}>
                                     {editTabs.map((t, index) => {

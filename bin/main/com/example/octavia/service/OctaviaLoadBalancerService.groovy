@@ -156,7 +156,9 @@ class OctaviaLoadBalancerService {
             if (response.success) {
                 return ServiceResponse.success(response.data?.loadbalancer)
             } else {
-                return ServiceResponse.error("Create Load Balancer failed: ${response.msg ?: response.error}")
+                String eMsg = extractOctaviaError(response, "Create Load Balancer failed")
+                log.error(eMsg)
+                return ServiceResponse.error(eMsg)
             }
         } catch (Exception e) {
             log.error("Error creating load balancer: ${e.message}", e)
@@ -175,7 +177,9 @@ class OctaviaLoadBalancerService {
             if (response.success) {
                 return ServiceResponse.success(response.data?.loadbalancer)
             } else {
-                return ServiceResponse.error("Get Load Balancer failed: ${response.msg ?: response.error}")
+                String eMsg = extractOctaviaError(response, "Get Load Balancer failed")
+                log.error(eMsg)
+                return ServiceResponse.error(eMsg)
             }
         } catch (Exception e) {
             log.error("Error getting load balancer: ${e.message}", e)
@@ -251,7 +255,9 @@ class OctaviaLoadBalancerService {
             if (success) {
                 return ServiceResponse.success()
             } else {
-                return ServiceResponse.error("Update failed: ${errors.join(', ')}")
+                String fullError = "Update failed: ${errors.join(' | ')}"
+                log.error(fullError)
+                return ServiceResponse.error(fullError)
             }
 
         } catch (Exception e) {
@@ -271,12 +277,42 @@ class OctaviaLoadBalancerService {
              if (response.success) {
                  return ServiceResponse.success()
              } else {
-                 return ServiceResponse.error("Delete Load Balancer failed: ${response.msg ?: response.error}")
+                 String eMsg = extractOctaviaError(response, "Delete Load Balancer failed")
+                 log.error(eMsg)
+                 return ServiceResponse.error(eMsg)
              }
         } catch (Exception e) {
              log.error("Error deleting load balancer: ${e.message}", e)
              return ServiceResponse.error("Error deleting load balancer: ${e.message}")
         }
+    }
+
+    // ── Helper ──────────────────────────────────────────────────
+    
+    /**
+     * Extracts clear error messages from Octavia/Neutron JSON error formats.
+     */
+    private String extractOctaviaError(ServiceResponse response, String defaultPrefix) {
+        String baseMsg = response.msg ?: response.error ?: response.content ?: "Unknown API Error"
+        try {
+            if (response.content) {
+                def json = new groovy.json.JsonSlurper().parseText(response.content)
+                if (json instanceof Map) {
+                    if (json.faultstring) return "${defaultPrefix}: ${json.faultstring}"
+                    if (json.NeutronError?.message) return "${defaultPrefix}: ${json.NeutronError.message}"
+                    if (json.message) return "${defaultPrefix}: ${json.message}"
+                    if (json.error) return "${defaultPrefix}: ${json.error}"
+                }
+            }
+        } catch (Exception ignore) {
+            // Not JSON
+        }
+        
+        if (baseMsg.contains("<html")) {
+            return "${defaultPrefix}: ${response.error ?: 'HTTP Error'}"
+        }
+        
+        return "${defaultPrefix}: ${baseMsg}"
     }
 
     /**

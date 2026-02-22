@@ -91,13 +91,17 @@
             setValidationMsg('');
             setLoading(true);
             window.Octavia.api.createLoadBalancer(data)
-                .then(() => {
+                .then(res => {
                     setLoading(false);
-                    onCreated();
+                    if (res && res.success === false) {
+                        setValidationMsg('Error: ' + (res.msg || res.error || 'Unknown error occurred'));
+                    } else {
+                        onCreated();
+                    }
                 })
                 .catch(e => {
                     setLoading(false);
-                    setValidationMsg('Error: ' + e.message);
+                    setValidationMsg('Error: ' + (e.message || e.error || 'Network error'));
                 });
         };
 

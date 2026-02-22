@@ -16,10 +16,12 @@ class OctaviaLoadBalancerSync {
 
     private final MorpheusContext morpheus
     private final Cloud cloud
+    private final String tenantName
 
-    OctaviaLoadBalancerSync(MorpheusContext morpheus, Cloud cloud) {
+    OctaviaLoadBalancerSync(MorpheusContext morpheus, Cloud cloud, String tenantName) {
         this.morpheus = morpheus
         this.cloud = cloud
+        this.tenantName = tenantName
     }
 
     /**
@@ -31,8 +33,12 @@ class OctaviaLoadBalancerSync {
 
         try {
             // 1. Fetch existing Morpheus records (Projections)
-            // Filter by Cloud ID using listIdentityProjections
-            def domainRecords = morpheus.async.loadBalancer.listIdentityProjections(cloud.id)
+            // Filter by Cloud ID and Tenant (Project) ID via internalId
+            def query = new com.morpheusdata.core.data.DataQuery()
+                .withFilter('cloud.id', cloud.id)
+                .withFilter('internalId', tenantName)
+                
+            def domainRecords = morpheus.async.loadBalancer.listIdentityProjections(query)
 
             // 2. Initialize SyncTask
             // Match Function: Existing.externalId == API.id
@@ -52,9 +58,9 @@ class OctaviaLoadBalancerSync {
                     lb.name = apiItem.name
                     lb.externalId = apiItem.id
                     lb.description = apiItem.description
-                    lb.ipAddress = apiItem.vip_address
-                    lb.providerId = apiItem.provider // 'octavia'
+                    lb.internalIp = apiItem.vip_address
                     lb.status = mapStatus(apiItem.provisioning_status)
+                    lb.internalId = tenantName // Store OpenStack project ID explicitly so we can filter by it
                     // Set type code if we had a dedicated type, otherwise generic
                     // lb.type = ... 
                     newItems << lb
@@ -76,8 +82,8 @@ class OctaviaLoadBalancerSync {
                         existing.name = api.name
                         changed = true
                     }
-                    if (existing.ipAddress != api.vip_address) {
-                        existing.ipAddress = api.vip_address
+                    if (existing.internalIp != api.vip_address) {
+                        existing.internalIp = api.vip_address
                         changed = true
                     }
                     String newStatus = mapStatus(api.provisioning_status)
