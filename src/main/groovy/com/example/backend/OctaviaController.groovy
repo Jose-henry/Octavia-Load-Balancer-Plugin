@@ -77,6 +77,9 @@ class OctaviaController implements PluginController {
         def routes = [
             // Diagnostic endpoint - minimal test case
             Route.build("/octavia1234/ping",               "ping",                perm),
+            Route.build("/octavia1234/debugInstances",     "debugInstances",      perm),
+            Route.build("/octavia1234/debugNetwork",       "debugNetwork",        perm),
+            Route.build("/octavia1234/debugCloud",         "debugCloud",          perm),
 
             // Primary routes using {pluginCode}/{action} format (like BigIP pattern)
             Route.build("/octavia1234/loadbalancers",      "loadbalancers",       perm),
@@ -124,6 +127,95 @@ class OctaviaController implements PluginController {
         } catch (Exception ex) {
             log.error("ping() failed: {}", ex.message, ex)
             return JsonResponse.of([status: 'error', message: ex.message])
+        }
+    }
+
+    def debugInstances(ViewModel<Map> model) {
+        log.info("debugInstances endpoint called")
+        try {
+            def userIdentity = model.user  // Get current user
+            def accountId = userIdentity?.account?.id  // Get their account/tenant
+            
+            def query = new com.morpheusdata.core.data.DataQuery(userIdentity)
+            query.max = 5000000L
+            query.withJoin("server")  // Join to ComputeServer
+            query.withJoin("instance")  // Join to Instance
+            
+            def workloads = lookupService.morpheus.async.workload.list(query).toList().blockingGet() ?: []
+            
+            return JsonResponse.of([
+                message: "Fetched ${workloads.size()} instances for account ${accountId}",
+                instances: workloads*.properties
+            ])
+        } catch (Exception ex) {
+            log.error("Error in debugInstances", ex)
+            return JsonResponse.of([error: ex.message])
+        }
+    }
+
+    def debugNetwork(ViewModel<Map> model) {
+        log.info("debugNetwork endpoint called")
+        try {
+            def networkIdStr = getParam(model, 'networkId')
+            if (!networkIdStr) {
+                def query = new com.morpheusdata.core.data.DataQuery()
+                query.max = 50L
+                def allNetworks = lookupService.morpheus.async.network.list(query).toList().blockingGet() ?: []
+                return JsonResponse.of([
+                    message: "Pass ?networkId=XXX to debug a specific network. Here are the first 50:",
+                    availableNetworks: allNetworks.collect { [id: it.id, name: it.name, cloudId: it.cloud?.id] }
+                ])
+            }
+            
+            def networkId = networkIdStr.toLong()
+            def network = lookupService.morpheus.async.network.get(networkId).blockingGet()
+            
+            if (network) {
+                // Get subnets for the SPECIFIC network by passing the network object
+                def subnets = lookupService.morpheus.async.network.subnet.listIdentityProjections(network).toList().blockingGet() ?: []
+                
+                // Or use DataQuery to filter by networkId
+                def subnetQuery = new com.morpheusdata.core.data.DataQuery()
+                subnetQuery.withFilter("network.id", networkId)
+                def subnetsAlt = lookupService.morpheus.async.network.subnet.list(subnetQuery).toList().blockingGet() ?: []
+                
+                return JsonResponse.of([
+                    network: network, 
+                    subnets: subnets.collect { [id: it.id, name: it.name, cidr: it.cidr] }
+                ])
+            }
+            return JsonResponse.of([error: "Network not found"])
+        } catch (Exception ex) {
+            log.error("Error in debugNetwork", ex)
+            return JsonResponse.of([error: ex.message])
+        }
+    }
+    
+    def debugCloud(ViewModel<Map> model) {
+        try {
+            def cloudIdStr = getParam(model, 'cloudId')
+            if (!cloudIdStr) {
+                def allClouds = lookupService.morpheus.async.cloud.list(new com.morpheusdata.core.data.DataQuery()).toList().blockingGet()
+                return JsonResponse.of([
+                    message: "Pass ?cloudId=XXX to debug a specific cloud.",
+                    availableClouds: allClouds.collect { [id: it.id, name: it.name, code: it.code] }
+                ])
+            }
+            
+            def cloudId = cloudIdStr.toLong()
+            def cloud = lookupService.morpheus.async.cloud.get(cloudId).blockingGet()
+            if (!cloud) return JsonResponse.of([error: "Cloud not found"])
+            
+            def auth = this.authService.authenticate(cloud)
+            return JsonResponse.of([
+                cloudName: cloud.name,
+                cloudId: cloud.id,
+                cloudCode: cloud.code,
+                authValid: auth.success,
+                authError: auth.msg ?: "None"
+            ])
+        } catch (Exception ex) {
+            return JsonResponse.of([error: ex.message])
         }
     }
 
@@ -253,10 +345,10 @@ class OctaviaController implements PluginController {
                 [
                     id: lb.externalId,
                     name: lb.name,
-                    vip_address: lb.ipAddress,
+                    vip_address: lb.internalIp,
                     provisioning_status: mapMorpheusStatusToOctavia(lb.status),
                     description: lb.description,
-                    provider: lb.providerId,
+                    provider: lb.type?.code ?: "octavia",
                     members: [] // Members count will be zero in list view, lazy loaded on Edit
                 ]
             }
@@ -302,6 +394,8 @@ class OctaviaController implements PluginController {
             if (!cloud) {
                 return JsonResponse.of([success: false, error: 'Cloud context not found'])
             }
+
+            log.info("Creating LB Payload:\n{}", groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(payload)))
 
             def result = lbService.create(cloud, tenantName, payload)
             if (result.success) {

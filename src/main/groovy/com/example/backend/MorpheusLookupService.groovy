@@ -138,7 +138,15 @@ class MorpheusLookupService {
                     { inst -> 
                         if (inst.containers && !inst.containers.isEmpty()) {
                             inst.containers.each { container ->
-                                String containerIp = container.internalIp ?: container.externalIp ?: inst.internalIp ?: inst.ipAddress ?: ""
+                                String containerIp = ""
+                                if (container.server) {
+                                    containerIp = container.server.internalIp ?: container.server.externalIp ?: ""
+                                }
+                                
+                                // Fallback to container's own IPs if no server IP
+                                if (!containerIp) {
+                                    containerIp = container.internalIp ?: container.externalIp ?: ""
+                                }
                                 String displayName = inst.containers.size() > 1 ? "${inst.name} - ${container.name ?: 'VM'}" : (inst.name ?: "Instance ${inst.id}")
                                 
                                 if (containerIp) {

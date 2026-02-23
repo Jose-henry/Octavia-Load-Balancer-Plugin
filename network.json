@@ -1,0 +1,255 @@
+{
+    "message": "Pass ?networkId=XXX to debug a specific network. Here are the first 50:",
+    "availableNetworks": [
+        {
+            "id": 30,
+            "name": "public-network-03",
+            "cloudId": 4
+        },
+        {
+            "id": 31,
+            "name": "public-network-04",
+            "cloudId": 4
+        },
+        {
+            "id": 32,
+            "name": "public-network-02",
+            "cloudId": 4
+        },
+        {
+            "id": 33,
+            "name": "default-net",
+            "cloudId": 4
+        },
+        {
+            "id": 34,
+            "name": "public-network-01",
+            "cloudId": 4
+        },
+        {
+            "id": 39,
+            "name": "First Private Network",
+            "cloudId": 4
+        },
+        {
+            "id": 40,
+            "name": "DELLDefault",
+            "cloudId": 4
+        },
+        {
+            "id": 46,
+            "name": "David",
+            "cloudId": 4
+        },
+        {
+            "id": 63,
+            "name": "Injection",
+            "cloudId": 4
+        },
+        {
+            "id": 71,
+            "name": "LAN_Tobe",
+            "cloudId": 4
+        },
+        {
+            "id": 84,
+            "name": "app-subnet",
+            "cloudId": 4
+        },
+        {
+            "id": 85,
+            "name": "Staging Network",
+            "cloudId": 4
+        },
+        {
+            "id": 89,
+            "name": "poc-vpc",
+            "cloudId": 4
+        },
+        {
+            "id": 91,
+            "name": "UpgradeNet",
+            "cloudId": 4
+        },
+        {
+            "id": 94,
+            "name": "WAF test",
+            "cloudId": 4
+        },
+        {
+            "id": 102,
+            "name": "DNSTest1",
+            "cloudId": 4
+        },
+        {
+            "id": 103,
+            "name": "messi",
+            "cloudId": 4
+        },
+        {
+            "id": 104,
+            "name": "Net1",
+            "cloudId": 4
+        },
+        {
+            "id": 106,
+            "name": "Lamine",
+            "cloudId": 4
+        },
+        {
+            "id": 107,
+            "name": "Default",
+            "cloudId": 4
+        },
+        {
+            "id": 108,
+            "name": "Uri",
+            "cloudId": 4
+        },
+        {
+            "id": 110,
+            "name": "zeus-network",
+            "cloudId": 4
+        },
+        {
+            "id": 111,
+            "name": "FI_MTN_SW",
+            "cloudId": 4
+        },
+        {
+            "id": 112,
+            "name": "MyNetwork",
+            "cloudId": 4
+        },
+        {
+            "id": 113,
+            "name": "Avetium_VM",
+            "cloudId": 4
+        },
+        {
+            "id": 114,
+            "name": "My2ndNetwork",
+            "cloudId": 4
+        },
+        {
+            "id": 115,
+            "name": "PS1LAN",
+            "cloudId": 4
+        },
+        {
+            "id": 119,
+            "name": "projecta1",
+            "cloudId": 4
+        },
+        {
+            "id": 120,
+            "name": "SG-Test",
+            "cloudId": 4
+        },
+        {
+            "id": 121,
+            "name": "SGTestPS-Net",
+            "cloudId": 4
+        },
+        {
+            "id": 122,
+            "name": "Mundane",
+            "cloudId": 4
+        },
+        {
+            "id": 123,
+            "name": "LBA-Network",
+            "cloudId": 4
+        },
+        {
+            "id": 124,
+            "name": "MS",
+            "cloudId": 4
+        },
+        {
+            "id": 125,
+            "name": "Lelouch",
+            "cloudId": 4
+        },
+        {
+            "id": 126,
+            "name": "NoFlotingIPNet",
+            "cloudId": 4
+        },
+        {
+            "id": 127,
+            "name": "VPCkindNET",
+            "cloudId": 4
+        },
+        {
+            "id": 129,
+            "name": "Avetium_Network2",
+            "cloudId": 4
+        },
+        {
+            "id": 132,
+            "name": "Prod Net",
+            "cloudId": 4
+        },
+        {
+            "id": 133,
+            "name": "Test",
+            "cloudId": 4
+        },
+        {
+            "id": 135,
+            "name": "omo",
+            "cloudId": 4
+        },
+        {
+            "id": 136,
+            "name": "kezia_1",
+            "cloudId": 4
+        },
+        {
+            "id": 137,
+            "name": "kezia-ONCALL",
+            "cloudId": 4
+        },
+        {
+            "id": 138,
+            "name": "Imperial Server",
+            "cloudId": 4
+        },
+        {
+            "id": 140,
+            "name": "Kezia-ONCALL2",
+            "cloudId": 4
+        },
+        {
+            "id": 141,
+            "name": "Kezia-SGONCALL4",
+            "cloudId": 4
+        },
+        {
+            "id": 143,
+            "name": "Elasticsearch",
+            "cloudId": 4
+        },
+        {
+            "id": 144,
+            "name": "velantestnetwork",
+            "cloudId": 4
+        },
+        {
+            "id": 145,
+            "name": "mavo",
+            "cloudId": 4
+        },
+        {
+            "id": 146,
+            "name": "Prod-Main Net",
+            "cloudId": 4
+        },
+        {
+            "id": 147,
+            "name": "BugoNet",
+            "cloudId": 4
+        }
+    ]
+}

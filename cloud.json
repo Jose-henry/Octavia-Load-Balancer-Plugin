@@ -1,0 +1,10 @@
+{
+    "message": "Pass ?cloudId=XXX to debug a specific cloud.",
+    "availableClouds": [
+        {
+            "id": 4,
+            "name": "MTNNG_CLOUD_AZ_1",
+            "code": "openstack"
+        }
+    ]
+}

@@ -1,0 +1,31 @@
+> Task :compileJava NO-SOURCE
+
+> Task :compileGroovy
+startup failed:
+C:\Users\josep\OneDrive\Desktop\projects\Octavia-Load-Balancer-Plugin\src\main\groovy\com\example\backend\OctaviaController.groovy: 168: unable to resolve class OctaviaClient
+ @ line 168, column 27.
+               OctaviaClient client = new OctaviaClient(ctx.cloud, lookupService.morpheus)
+                             ^
+
+C:\Users\josep\OneDrive\Desktop\projects\Octavia-Load-Balancer-Plugin\src\main\groovy\com\example\backend\OctaviaController.groovy: 168: unable to resolve class OctaviaClient
+ @ line 168, column 36.
+               OctaviaClient client = new OctaviaClient(ctx.cloud, lookupService.morpheus)
+                                      ^
+
+2 errors
+
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileGroovy'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Task :compileGroovy FAILED
+> Run with --info option to get more log output.
+> Run with --scan to get full insights.
+
+BUILD FAILED in 10s
+1 actionable task: 1 executed
