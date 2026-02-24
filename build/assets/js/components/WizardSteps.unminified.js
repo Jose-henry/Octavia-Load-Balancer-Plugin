@@ -567,7 +567,7 @@
                 availableIps.push({ label: `Internal — ${inst.ip}`, value: inst.ip });
             }
             if (inst.externalIp && inst.externalIp !== inst.ip) {
-                availableIps.push({ label: `Floating — ${inst.externalIp}`, value: inst.externalIp });
+                availableIps.push({ label: `External — ${inst.externalIp}`, value: inst.externalIp });
             }
             // Fallback: if we somehow have no IPs at all
             if (availableIps.length === 0) {

@@ -63,7 +63,17 @@
             <div>
                 {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
                 {deleteTarget && <DeleteConfirmModalComp lb={deleteTarget} loading={deleting} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} />}
-                {view === 'create' && <CreateWizardComp networkId={networkId} options={{ ...options, subnets }} onClose={() => setView('list')} onCreated={() => { setView('list'); }} />}
+                {view === 'create' && (
+                    <CreateWizardComp
+                        networkId={networkId}
+                        options={{ ...options, subnets }}
+                        onClose={() => setView('list')}
+                        onCreated={() => {
+                            setView('list');
+                            setToast({ msg: 'Load Balancer created successfully.', type: 'success' });
+                        }}
+                    />
+                )}
                 {view === 'edit' && selectedLb && <EditLBModalComp lb={selectedLb} networkId={networkId} options={{ ...options, subnets }} onClose={() => { setSelectedLb(null); setView('list'); }} onUpdated={() => { setSelectedLb(null); setView('list'); }} />}
 
                 {/* Toolbar — ADD button */}

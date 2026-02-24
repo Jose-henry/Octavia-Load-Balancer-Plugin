@@ -83,10 +83,15 @@
                   DeleteConfirmModalComp,
                   {lb: deleteTarget, loading: deleting, onClose: () => setDeleteTarget(null), onConfirm: handleDelete}
                 ),
-              view === 'create' && React.createElement(
-                       CreateWizardComp,
-                       {networkId: networkId, options: { ...options, subnets }, onClose: () => setView('list'), onCreated: () => { setView('list'); }}
-                     ),
+              view === 'create' && (
+                    React.createElement(
+                      CreateWizardComp,
+                      {networkId: networkId, options: { ...options, subnets }, onClose: () => setView('list'), onCreated: () => {
+                            setView('list');
+                            setToast({ msg: 'Load Balancer created successfully.', type: 'success' });
+                        }}
+                    )
+                ),
               view === 'edit' && selectedLb && React.createElement(
                                    EditLBModalComp,
                                    {lb: selectedLb, networkId: networkId, options: { ...options, subnets }, onClose: () => { setSelectedLb(null); setView('list'); }, onUpdated: () => { setSelectedLb(null); setView('list'); }}

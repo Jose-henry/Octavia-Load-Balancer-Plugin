@@ -17,8 +17,10 @@ trigger: always_on
    - Use `mcp_notebooklm` tools to query documentation if in doubt
 
 2. **Reference example plugins:**
-   - `morpheus-bigip-loadbalancer-plugin/` - LoadBalancer patterns
-   - `morpheus-dashboards/` - UI/Dashboard patterns
+   - `C:\Users\josep\OneDrive\Desktop\projects\Octavia-Load-Balancer-Plugin\example plugin\morpheus-bigip-loadbalancer-plugin` - LoadBalancer patterns
+   - `C:\Users\josep\OneDrive\Desktop\projects\Octavia-Load-Balancer-Plugin\example plugin\morpheus-dashboards` - UI/Dashboard patterns
+   - `C:\Users\josep\OneDrive\Desktop\projects\Octavia-Load-Balancer-Plugin\example plugin\morpheus-plugin-core` - Plugin core principles
+   - `C:\Users\josep\OneDrive\Desktop\projects\Octavia-Load-Balancer-Plugin\example plugin\morpheus-plugin-samples` - plugin sample codes
 
 3. **When uncertain about an API or pattern:**
    - **First**: Use context7 to search for Morpheus Plugin API documentation

@@ -796,7 +796,7 @@ window.Octavia = window.Octavia || {};
                 availableIps.push({ label: `Internal — ${inst.ip}`, value: inst.ip });
             }
             if (inst.externalIp && inst.externalIp !== inst.ip) {
-                availableIps.push({ label: `Floating — ${inst.externalIp}`, value: inst.externalIp });
+                availableIps.push({ label: `External — ${inst.externalIp}`, value: inst.externalIp });
             }
             // Fallback: if we somehow have no IPs at all
             if (availableIps.length === 0) {
@@ -2015,10 +2015,15 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                   DeleteConfirmModalComp,
                   {lb: deleteTarget, loading: deleting, onClose: () => setDeleteTarget(null), onConfirm: handleDelete}
                 ),
-              view === 'create' && React.createElement(
-                       CreateWizardComp,
-                       {networkId: networkId, options: { ...options, subnets }, onClose: () => setView('list'), onCreated: () => { setView('list'); }}
-                     ),
+              view === 'create' && (
+                    React.createElement(
+                      CreateWizardComp,
+                      {networkId: networkId, options: { ...options, subnets }, onClose: () => setView('list'), onCreated: () => {
+                            setView('list');
+                            setToast({ msg: 'Load Balancer created successfully.', type: 'success' });
+                        }}
+                    )
+                ),
               view === 'edit' && selectedLb && React.createElement(
                                    EditLBModalComp,
                                    {lb: selectedLb, networkId: networkId, options: { ...options, subnets }, onClose: () => { setSelectedLb(null); setView('list'); }, onUpdated: () => { setSelectedLb(null); setView('list'); }}
