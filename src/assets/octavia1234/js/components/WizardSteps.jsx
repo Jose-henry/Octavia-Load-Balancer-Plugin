@@ -232,10 +232,29 @@
         const addInternal = () => {
             if (!selectedInst) return;
             const inst = options.instances.find(i => i.value === selectedInst);
+
+            // Collect all available IPs for this instance so the user can choose later
+            const availableIps = [];
+            if (inst.ip && inst.ip !== '0.0.0.0') {
+                availableIps.push({ label: `Internal — ${inst.ip}`, value: inst.ip });
+            }
+            if (inst.externalIp && inst.externalIp !== inst.ip) {
+                availableIps.push({ label: `External — ${inst.externalIp}`, value: inst.externalIp });
+            }
+            // Fallback: if we somehow have no IPs at all
+            if (availableIps.length === 0) {
+                availableIps.push({ label: '0.0.0.0', value: '0.0.0.0' });
+            }
+
             const newMember = {
-                id: inst.value, name: inst.name, type: 'INTERNAL',
-                address: inst.ip || '0.0.0.0', // Real IP from Morpheus options payload
-                port: 80, weight: 1, role: 'member'
+                id: inst.value,
+                name: inst.name,
+                type: 'INTERNAL',
+                availableIps,                     // all IPs the dropdown will show
+                address: availableIps[0].value,   // default to internal IP
+                port: 80,
+                weight: 1,
+                role: 'member'
             };
             update('members', [...(data.members || []), newMember]);
             setSelectedInst('');
@@ -245,8 +264,13 @@
             if (!extIp) return;
             const newMember = {
                 id: 'ext-' + Math.floor(Math.random() * 10000),
-                name: extIp, type: 'EXTERNAL',
-                address: extIp, port: extPort, weight: extWeight, role: 'member'
+                name: extIp,
+                type: 'EXTERNAL',
+                availableIps: [{ label: extIp, value: extIp }],
+                address: extIp,
+                port: extPort,
+                weight: extWeight,
+                role: 'member'
             };
             update('members', [...(data.members || []), newMember]);
             setExtIp('');
@@ -303,7 +327,27 @@
                                     (data.members || []).map(m => (
                                         <tr key={m.id}>
                                             <td>{m.name}</td>
-                                            <td>{m.address}</td>
+                                            <td>
+                                                {/* ── IP address picker ───────────────────────────────────────
+                                                    If there is more than one available IP (internal + external),
+                                                    show a dropdown so the user can choose which one to register.
+                                                    If only one IP exists (external members, or instances where
+                                                    only one IP was resolved) fall back to plain text.          */}
+                                                {(m.availableIps && m.availableIps.length > 1) ? (
+                                                    <select
+                                                        className="form-control input-sm"
+                                                        style={{ minWidth: 200 }}
+                                                        value={m.address}
+                                                        onChange={e => updateMember(m.id, 'address', e.target.value)}
+                                                    >
+                                                        {m.availableIps.map(ip => (
+                                                            <option key={ip.value} value={ip.value}>{ip.label}</option>
+                                                        ))}
+                                                    </select>
+                                                ) : (
+                                                    m.address
+                                                )}
+                                            </td>
                                             <td><input type="number" className="form-control input-sm" style={{ width: 80 }} value={m.port} onChange={e => updateMember(m.id, 'port', parseInt(e.target.value) || 80)} /></td>
                                             <td><input type="number" className="form-control input-sm" style={{ width: 80 }} value={m.weight} onChange={e => updateMember(m.id, 'weight', parseInt(e.target.value) || 1)} /></td>
                                             <td><Badge text={m.type || 'INTERNAL'} tone={m.type === 'EXTERNAL' ? 'warning' : 'info'} /></td>

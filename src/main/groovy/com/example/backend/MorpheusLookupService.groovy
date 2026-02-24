@@ -138,6 +138,7 @@ class MorpheusLookupService {
                     { inst -> 
                         if (inst.containers && !inst.containers.isEmpty()) {
                             inst.containers.each { container ->
+                                // Get internal IP
                                 String containerIp = ""
                                 if (container.server) {
                                     containerIp = container.server.internalIp ?: container.server.externalIp ?: ""
@@ -147,22 +148,39 @@ class MorpheusLookupService {
                                 if (!containerIp) {
                                     containerIp = container.internalIp ?: container.externalIp ?: ""
                                 }
-                                String displayName = inst.containers.size() > 1 ? "${inst.name} - ${container.name ?: 'VM'}" : (inst.name ?: "Instance ${inst.id}")
                                 
-                                if (containerIp) {
-                                    displayName += " (${containerIp})"
-                                } else {
-                                    // Fallback if IP is deeply nested or missing
-                                    containerIp = "0.0.0.0" 
+                                if (!containerIp) {
+                                    containerIp = "0.0.0.0"
                                 }
                                 
-                                log.info("Found VM/Container {} with IP {} for Instance {}", container.name, containerIp, inst.name)
+                                // Get external IP
+                                String externalIp = ""
+                                if (container.server) {
+                                    externalIp = container.server.externalIp ?: ""
+                                }
+                                
+                                // Fallback to container's own external IP if no server external IP
+                                if (!externalIp) {
+                                    externalIp = container.externalIp ?: ""
+                                }
+                                
+                                String displayName = inst.containers.size() > 1 ? 
+                                    "${inst.name} - ${container.name ?: 'VM'}" : 
+                                    (inst.name ?: "Instance ${inst.id}")
+                                
+                                if (containerIp && containerIp != "0.0.0.0") {
+                                    displayName += " (${containerIp})"
+                                }
+                                
+                                log.info("Found VM/Container {} with Internal IP {} and External IP {} for Instance {}", 
+                                    container.name, containerIp, externalIp, inst.name)
                                 
                                 items << [
                                     name: displayName, 
-                                    value: container.id?.toString(), // Use the container ID so the UI can look up the specific node
+                                    value: container.id?.toString(),
                                     instanceId: inst.id?.toString(),
-                                    ip: containerIp
+                                    ip: containerIp,
+                                    externalIp: externalIp ?: null  // Add external IP to response
                                 ]
                             }
                         } else {
