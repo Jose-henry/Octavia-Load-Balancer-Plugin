@@ -1,7 +1,7 @@
 const DeleteConfirmModal = ({ lb, onClose, onConfirm, loading }) => (
     React.createElement(
       "div",
-      {className: "modal fade in", style: { display: 'block' }},
+      {className: "modal fade in", style: { display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', overflowY: 'auto' }},
       React.createElement(
         "div",
         {className: "modal-dialog"},
@@ -85,10 +85,6 @@ const DeleteConfirmModal = ({ lb, onClose, onConfirm, loading }) => (
             )
           )
         )
-      ),
-      React.createElement(
-        "div",
-        {className: "modal-backdrop fade in"}
       )
     )
 );

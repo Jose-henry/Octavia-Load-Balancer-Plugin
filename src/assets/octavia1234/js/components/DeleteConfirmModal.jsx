@@ -1,5 +1,5 @@
 const DeleteConfirmModal = ({ lb, onClose, onConfirm, loading }) => (
-    <div className="modal fade in" style={{ display: 'block' }}>
+    <div className="modal fade in" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)', overflowY: 'auto' }}>
         <div className="modal-dialog">
             <div className="modal-content">
                 <div className="modal-header">
@@ -24,7 +24,6 @@ const DeleteConfirmModal = ({ lb, onClose, onConfirm, loading }) => (
                 </div>
             </div>
         </div>
-        <div className="modal-backdrop fade in"></div>
     </div>
 );
 

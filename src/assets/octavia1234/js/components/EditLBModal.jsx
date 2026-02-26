@@ -6,6 +6,14 @@
 
         const [tab, setTab] = React.useState('general');
         const [data, setData] = React.useState({ ...lb });
+
+        const vipSubnetDisplay = React.useMemo(() => {
+            const vipId = data.vip_subnet_id;
+            if (!vipId) return '';
+            const sub = (options?.subnets || []).find(s => s.value === vipId);
+            if (!sub) return vipId;
+            return sub.cidr ? `${sub.name} (${sub.cidr})` : sub.name;
+        }, [options, data.vip_subnet_id]);
         const [saving, setSaving] = React.useState(false);
         const [validationMsg, setValidationMsg] = React.useState('');
 
@@ -24,6 +32,19 @@
             if (details) {
                 // Merge details into data
                 const newD = { ...data };
+
+                // Base LB details (vip, subnet, admin state)
+                if (details.loadbalancer) {
+                    const lbInfo = details.loadbalancer;
+                    if (lbInfo.vip_address) newD.vip_address = lbInfo.vip_address;
+                    if (lbInfo.vip_subnet_id) newD.vip_subnet_id = lbInfo.vip_subnet_id;
+                    if (typeof lbInfo.admin_state_up === 'boolean') {
+                        newD.admin_state_up = lbInfo.admin_state_up;
+                    }
+                }
+                if (newD.admin_state_up === undefined) {
+                    newD.admin_state_up = true;
+                }
                 if (details.listeners && details.listeners.length > 0) {
                     const l = details.listeners[0];
                     newD.createListener = true;
@@ -32,7 +53,7 @@
                     newD.listenerPort = l.protocol_port;
                     newD.connectionLimit = l.connection_limit;
                     newD.allowedCidrs = (l.allowed_cidrs || []).join(',');
-                    // ... map other listener fields
+                    newD.listenerAdminStateUp = (typeof l.admin_state_up === 'boolean') ? l.admin_state_up : true;
                 } else {
                     newD.createListener = false;
                 }
@@ -44,10 +65,8 @@
                     newD.poolAlgorithm = p.lb_algorithm;
                     newD.poolProtocol = p.protocol;
                     newD.poolDesc = p.description;
-                    // Members are usually part of pool or fetched separately? 
-                    // In Octavia, members are sub-resource of pool.
-                    // Our Api.listPools might need to fetch members too or we rely on them being there?
-                    // The original code passed 'members' to Step4.
+                    newD.poolAdminStateUp = (typeof p.admin_state_up === 'boolean') ? p.admin_state_up : true;
+                    // Members are part of the pool in Octavia
                     newD.members = p.members || [];
                 } else {
                     newD.createPool = false;
@@ -56,11 +75,12 @@
                 if (details.monitor) {
                     const m = details.monitor;
                     newD.createMonitor = true;
-                    newD.monitorName = m.name || 'Monitor'; // Monitor often doesn't have name in some APIs
+                    newD.monitorName = m.name || 'Monitor';
                     newD.monitorType = m.type;
                     newD.delay = m.delay;
                     newD.timeout = m.timeout;
                     newD.maxRetries = m.max_retries;
+                    newD.monitorAdminStateUp = (typeof m.admin_state_up === 'boolean') ? m.admin_state_up : true;
                 } else {
                     newD.createMonitor = false;
                 }
@@ -130,7 +150,7 @@
                             </div>
 
                             <div className="tab-content" style={{ padding: '10px 0' }}>
-                                {loading ? <div style={{ textAlign: 'center', padding: 40 }}><i className="fa fa-spinner fa-spin"></i> Loading...</div> : <div>
+                                {loading ? <div className="loading-mask"><div className="text-center"><div className="ajax-loader"></div></div></div> : <div>
                                     {tab === 'general' && <div className="form-horizontal">
                                         <div className="row">
                                             <div className="col-md-6">
@@ -144,18 +164,76 @@
                                                 </Field>
                                             </div>
                                         </div>
+                                        <div className="row">
+                                            <div className="col-md-6">
+                                                <Field label="VIP Address">
+                                                    <input className="form-control" value={data.vip_address || ''} readOnly disabled />
+                                                </Field>
+                                            </div>
+                                            <div className="col-md-6">
+                                                <Field label="VIP Subnet">
+                                                    <input className="form-control" value={vipSubnetDisplay} readOnly disabled />
+                                                </Field>
+                                            </div>
+                                        </div>
                                         <Field label="Name"><input className="form-control" value={data.name || ''} onChange={e => update('name', e.target.value)} /></Field>
                                         <Field label="Description"><input className="form-control" value={data.description || ''} onChange={e => update('description', e.target.value)} /></Field>
                                         <div className="form-group"><div className="col-sm-12"><div className="checkbox"><label><input type="checkbox" checked={data.admin_state_up} onChange={e => update('admin_state_up', e.target.checked)} /> Admin State Up</label></div></div></div>
                                     </div>}
-                                    {tab === 'listener' && <Step2_Listener data={data} update={update} />}
+                                    {tab === 'listener' && <div>
+                                        <Step2_Listener data={data} update={update} />
+                                        <div className="form-group" style={{ marginTop: 10 }}>
+                                            <div className="col-sm-12">
+                                                <div className="checkbox">
+                                                    <label>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={data.listenerAdminStateUp !== false}
+                                                            onChange={e => update('listenerAdminStateUp', e.target.checked)}
+                                                        />{" "}
+                                                        Admin State Up
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>}
                                     {tab === 'pool' && <div>
                                         <Step3_Pool data={data} update={update} />
+                                        <div className="form-group" style={{ marginTop: 10 }}>
+                                            <div className="col-sm-12">
+                                                <div className="checkbox">
+                                                    <label>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={data.poolAdminStateUp !== false}
+                                                            onChange={e => update('poolAdminStateUp', e.target.checked)}
+                                                        />{" "}
+                                                        Admin State Up
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
                                         <hr />
                                         <h5 style={{ fontWeight: 600, marginBottom: 15 }}>Members</h5>
-                                        <Step4_Members data={data} update={update} options={{ instances: [] }} />
+                                        <Step4_Members data={data} update={update} options={{ instances: options?.instances || [] }} />
                                     </div>}
-                                    {tab === 'monitor' && <Step5_Monitor data={data} update={update} />}
+                                    {tab === 'monitor' && <div>
+                                        <Step5_Monitor data={data} update={update} />
+                                        <div className="form-group" style={{ marginTop: 10 }}>
+                                            <div className="col-sm-12">
+                                                <div className="checkbox">
+                                                    <label>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={data.monitorAdminStateUp !== false}
+                                                            onChange={e => update('monitorAdminStateUp', e.target.checked)}
+                                                        />{" "}
+                                                        Admin State Up
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>}
                                 </div>}
                             </div>
                         </div>

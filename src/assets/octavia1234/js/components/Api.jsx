@@ -104,7 +104,7 @@ window.Octavia = window.Octavia || {};
 
             // Helpers for Edit Modal
             listListeners: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx))
-                .then(r => ({ listeners: r.loadbalancer?.listeners || [] })),
+                .then(r => ({ listeners: r.loadbalancer?.listeners || [], loadbalancer: r.loadbalancer })),
 
             listPools: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx))
                 .then(r => ({ pools: r.loadbalancer?.pools || [] })),
@@ -112,8 +112,9 @@ window.Octavia = window.Octavia || {};
             getHealthMonitor: (lbId, ctx) => apiFetch(withContext(`${baseUrl}/loadbalancerDetails?id=${lbId}`, ctx))
                 .then(r => {
                     const pools = r.loadbalancer?.pools || [];
-                    const monitorId = pools.find(p => p.healthmonitor_id)?.healthmonitor_id;
-                    return { monitor: monitorId ? { id: monitorId } : null };
+                    const poolWithMonitor = pools.find(p => p.healthmonitor || p.healthmonitor_id);
+                    const monitor = poolWithMonitor?.healthmonitor || null;
+                    return { monitor };
                 }),
 
             attachFloatingIp: (lbId, fipPoolId, networkId) => apiFetch(`${baseUrl}/floatingipAttach`, { method: 'POST', body: JSON.stringify({ lbId, floatingIpPoolId: fipPoolId, networkId }) }),

@@ -51,8 +51,8 @@ class OctaviaController implements PluginController {
 
     private void initServices(MorpheusContext ctx) {
         this.lbService = new OctaviaLoadBalancerService(ctx)
-        this.poolService = new OctaviaPoolService()
-        this.networkingService = new OctaviaNetworkingService()
+        this.poolService = new OctaviaPoolService(ctx)
+        this.networkingService = new OctaviaNetworkingService(ctx)
         this.mockService = new MockOctaviaService()
         this.lookupService = ctx ? new MorpheusLookupService(ctx) : null
         this.authService = ctx ? new OctaviaAuthService(ctx) : null
@@ -315,45 +315,67 @@ class OctaviaController implements PluginController {
                 return JsonResponse.of([loadbalancers: []])
             }
 
-            // 1. Trigger background sync if 5 minutes have elapsed
-            String cacheKey = "${cloud.id}:${tenantName}"
-            long lastSync = lastSyncTimes[cacheKey] ?: 0
-            if (System.currentTimeMillis() - lastSync > SYNC_INTERVAL_MS) {
-                log.info("Sync interval exceeded for {}. Starting background SyncTask.", cacheKey)
-                lastSyncTimes[cacheKey] = System.currentTimeMillis()
-                Thread.start {
-                    try {
-                        def apiResult = lbService.list(cloud, tenantName)
-                        def apiList = apiResult.success ? (apiResult.data ?: []) : []
-                        new OctaviaLoadBalancerSync(morpheusContext, cloud, tenantName).execute(apiList)
-                    } catch (Exception e) {
-                        log.error("Background sync failed for ${cacheKey}", e)
-                        lastSyncTimes.remove(cacheKey) // allow retry on next refresh
-                    }
+            // Always retrieve fresh status from Octavia so provisioning_status and operating_status are accurate.
+            def apiResult = lbService.list(cloud, tenantName)
+            if (!apiResult.success) {
+                log.warn("Octavia list() failed for cloud {} tenant {}: {}", cloud.id, tenantName, apiResult.msg ?: apiResult.error)
+                return JsonResponse.of([loadbalancers: []])
+            }
+
+            def apiList = apiResult.data ?: []
+
+            // Kick off background sync to Morpheus DB using the same API payload
+            Thread.start {
+                try {
+                    new OctaviaLoadBalancerSync(morpheusContext, cloud, tenantName).execute(apiList)
+                } catch (Exception e) {
+                    log.error("Background sync failed during loadbalancers(): {}", e.message, e)
                 }
             }
 
-            // 2. Instantly fetch the cached list from Morpheus DB
-            def query = new com.morpheusdata.core.data.DataQuery()
-                .withFilter('cloud.id', cloud.id)
-                .withFilter('internalId', tenantName)
-            
-            def dbLbs = morpheusContext.async.loadBalancer.list(query).toList().blockingGet()
+            // For each LB, attempt to pull pool/member information in order to calculate a membersCount.
+            def mappedLbs = apiList.collect { lb ->
+                int memberCount = 0
+                try {
+                    def poolsResp = poolService.listPools(cloud, tenantName, lb.id)
+                    if (poolsResp.success) {
+                        def pools = poolsResp.data ?: []
+                        pools.each { p ->
+                            def poolId = p.id
+                            if (poolId) {
+                                def memResp = poolService.listMembers(cloud, tenantName, poolId)
+                                if (memResp.success) {
+                                    def members = memResp.data ?: []
+                                    memberCount += members.size()
+                                } else {
+                                    log.warn("Failed to list members for pool {} of LB {}: {}", poolId, lb.id, memResp.msg ?: memResp.error)
+                                }
+                            }
+                        }
+                    } else {
+                        log.warn("Failed to list pools for LB {}: {}", lb.id, poolsResp.msg ?: poolsResp.error)
+                    }
+                } catch (Exception memberEx) {
+                    log.warn("Error while computing memberCount for LB {}: {}", lb.id, memberEx.message)
+                }
 
-            // 3. Map DB entities back to the Octavia JSON format expected by the React UI
-            def mappedLbs = dbLbs.collect { lb ->
+                log.info("Mapped LB {} ({}) with provisioning_status={}, operating_status={}, memberCount={}",
+                        lb.name, lb.id, lb.provisioning_status, lb.operating_status, memberCount)
+
                 [
-                    id: lb.externalId,
-                    name: lb.name,
-                    vip_address: lb.internalIp,
-                    provisioning_status: mapMorpheusStatusToOctavia(lb.status),
-                    description: lb.description,
-                    provider: lb.type?.code ?: "octavia",
-                    members: [] // Members count will be zero in list view, lazy loaded on Edit
+                    id                 : lb.id,
+                    name               : lb.name,
+                    vip_address        : lb.vip_address,
+                    provisioning_status: lb.provisioning_status,
+                    operating_status   : lb.operating_status,
+                    description        : lb.description,
+                    provider           : lb.provider ?: "octavia",
+                    membersCount       : memberCount,
+                    networkId          : ctx.networkId,
+                    networkName        : ctx.network?.name
                 ]
             }
 
-            // Return instantly (< 0.05 seconds)
             return JsonResponse.of([loadbalancers: mappedLbs])
         } catch (Exception ex) {
             log.error("loadbalancers() failed: {}", ex.message, ex)
@@ -421,6 +443,7 @@ class OctaviaController implements PluginController {
         try {
             def payload = parseRequestBody(model)
             def lbId = payload.lbId ?: payload.id
+            log.info("loadbalancersDelete() request payload: {}", groovy.json.JsonOutput.toJson(payload))
 
             if (isMockMode()) {
                 def result = mockService.deleteLoadBalancer(lbId)
@@ -441,6 +464,7 @@ class OctaviaController implements PluginController {
             }
 
             def result = lbService.delete(cloud, tenantName, lbId)
+            log.info("loadbalancersDelete() response: success={}, msg={}, error={}", result.success, result.msg, result.error)
             if (result.success) {
                 try {
                     // Synchronously update the Morpheus DB so the UI table immediately removes the LB
@@ -481,16 +505,48 @@ class OctaviaController implements PluginController {
                 return JsonResponse.of([success: false, error: 'Missing cloud context or LB id'])
             }
 
-            // Fetch the LB details via the list endpoint with filter, or individual get
-            // Since OctaviaLoadBalancerService.list returns all, filter client-side
-            def allResult = lbService.list(cloud, tenantName)
-            def lbs = allResult.data ?: []
-            def lb = lbs.find { it.id == lbId }
-            if (lb) {
-                return JsonResponse.of([success: true, loadbalancer: lb])
-            } else {
-                return JsonResponse.of([success: false, error: "Load Balancer ${lbId} not found"])
+            // Fetch full LB details from Octavia
+            def lbResp = lbService.get(cloud, tenantName, lbId)
+            if (!lbResp.success) {
+                return JsonResponse.of([success: false, error: lbResp.msg ?: lbResp.error ?: "Failed to fetch load balancer ${lbId}"])
             }
+
+            def lb = lbResp.data
+
+            // Enrich with pools, members, and health monitor where possible
+            try {
+                def poolsResp = poolService.listPools(cloud, tenantName, lbId)
+                if (poolsResp.success) {
+                    def pools = poolsResp.data ?: []
+                    pools.each { p ->
+                        def poolId = p.id
+                        if (poolId) {
+                            def memResp = poolService.listMembers(cloud, tenantName, poolId)
+                            if (memResp.success) {
+                                p.members = memResp.data ?: []
+                            } else {
+                                log.warn("loadbalancerDetails: failed to list members for pool {} of LB {}: {}", poolId, lbId, memResp.msg ?: memResp.error)
+                            }
+
+                            if (p.healthmonitor_id) {
+                                def hmResp = poolService.getHealthMonitor(cloud, tenantName, p.healthmonitor_id as String)
+                                if (hmResp.success) {
+                                    p.healthmonitor = hmResp.data
+                                } else {
+                                    log.warn("loadbalancerDetails: failed to fetch health monitor {} for pool {}: {}", p.healthmonitor_id, poolId, hmResp.msg ?: hmResp.error)
+                                }
+                            }
+                        }
+                    }
+                    lb.pools = pools
+                } else {
+                    log.warn("loadbalancerDetails: failed to list pools for LB {}: {}", lbId, poolsResp.msg ?: poolsResp.error)
+                }
+            } catch (Exception ex2) {
+                log.warn("loadbalancerDetails: error enriching LB {} with pools/members/monitor: {}", lbId, ex2.message)
+            }
+
+            return JsonResponse.of([success: true, loadbalancer: lb])
         } catch (Exception ex) {
             log.error("loadbalancerDetails() failed: {}", ex.message, ex)
             return JsonResponse.of([success: false, error: ex.message])
@@ -502,6 +558,7 @@ class OctaviaController implements PluginController {
         try {
             def payload = parseRequestBody(model)
             def lbId = payload.id
+            log.info("loadbalancerUpdate() request payload for LB {}: {}", lbId, groovy.json.JsonOutput.toJson(payload))
 
             if (isMockMode()) {
                 def result = mockService.updateLoadBalancer(lbId, payload)
@@ -522,6 +579,7 @@ class OctaviaController implements PluginController {
             }
 
             def result = lbService.update(cloud, tenantName, lbId, payload)
+            log.info("loadbalancerUpdate() response for LB {}: success={}, msg={}, error={}", lbId, result.success, result.msg, result.error)
             if (result.success) {
                 lastSyncTimes.remove("${cloud.id}:${tenantName}".toString())
             }

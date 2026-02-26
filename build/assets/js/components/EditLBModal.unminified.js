@@ -6,6 +6,14 @@
 
         const [tab, setTab] = React.useState('general');
         const [data, setData] = React.useState({ ...lb });
+
+        const vipSubnetDisplay = React.useMemo(() => {
+            const vipId = data.vip_subnet_id;
+            if (!vipId) return '';
+            const sub = (options?.subnets || []).find(s => s.value === vipId);
+            if (!sub) return vipId;
+            return sub.cidr ? `${sub.name} (${sub.cidr})` : sub.name;
+        }, [options, data.vip_subnet_id]);
         const [saving, setSaving] = React.useState(false);
         const [validationMsg, setValidationMsg] = React.useState('');
 
@@ -24,6 +32,19 @@
             if (details) {
                 // Merge details into data
                 const newD = { ...data };
+
+                // Base LB details (vip, subnet, admin state)
+                if (details.loadbalancer) {
+                    const lbInfo = details.loadbalancer;
+                    if (lbInfo.vip_address) newD.vip_address = lbInfo.vip_address;
+                    if (lbInfo.vip_subnet_id) newD.vip_subnet_id = lbInfo.vip_subnet_id;
+                    if (typeof lbInfo.admin_state_up === 'boolean') {
+                        newD.admin_state_up = lbInfo.admin_state_up;
+                    }
+                }
+                if (newD.admin_state_up === undefined) {
+                    newD.admin_state_up = true;
+                }
                 if (details.listeners && details.listeners.length > 0) {
                     const l = details.listeners[0];
                     newD.createListener = true;
@@ -32,7 +53,7 @@
                     newD.listenerPort = l.protocol_port;
                     newD.connectionLimit = l.connection_limit;
                     newD.allowedCidrs = (l.allowed_cidrs || []).join(',');
-                    // ... map other listener fields
+                    newD.listenerAdminStateUp = (typeof l.admin_state_up === 'boolean') ? l.admin_state_up : true;
                 } else {
                     newD.createListener = false;
                 }
@@ -44,10 +65,8 @@
                     newD.poolAlgorithm = p.lb_algorithm;
                     newD.poolProtocol = p.protocol;
                     newD.poolDesc = p.description;
-                    // Members are usually part of pool or fetched separately? 
-                    // In Octavia, members are sub-resource of pool.
-                    // Our Api.listPools might need to fetch members too or we rely on them being there?
-                    // The original code passed 'members' to Step4.
+                    newD.poolAdminStateUp = (typeof p.admin_state_up === 'boolean') ? p.admin_state_up : true;
+                    // Members are part of the pool in Octavia
                     newD.members = p.members || [];
                 } else {
                     newD.createPool = false;
@@ -56,11 +75,12 @@
                 if (details.monitor) {
                     const m = details.monitor;
                     newD.createMonitor = true;
-                    newD.monitorName = m.name || 'Monitor'; // Monitor often doesn't have name in some APIs
+                    newD.monitorName = m.name || 'Monitor';
                     newD.monitorType = m.type;
                     newD.delay = m.delay;
                     newD.timeout = m.timeout;
                     newD.maxRetries = m.max_retries;
+                    newD.monitorAdminStateUp = (typeof m.admin_state_up === 'boolean') ? m.admin_state_up : true;
                 } else {
                     newD.createMonitor = false;
                 }
@@ -169,16 +189,19 @@
                       {className: "tab-content", style: { padding: '10px 0' }},
                       loading ? React.createElement(
             "div",
-            {style: { textAlign: 'center', padding: 40 }},
+            {className: "loading-mask"},
             React.createElement(
-              "i",
-              {className: "fa fa-spinner fa-spin"}
-            ),
-            " Loading..."
+              "div",
+              {className: "text-center"},
+              React.createElement(
+                "div",
+                {className: "ajax-loader"}
+              )
+            )
           ) : React.createElement(
-                                                                                                                           "div",
-                                                                                                                           null,
-                                                                                                                           tab === 'general' && React.createElement(
+                                                                                                                         "div",
+                                                                                                                         null,
+                                                                                                                         tab === 'general' && React.createElement(
                        "div",
                        {className: "form-horizontal"},
                        React.createElement(
@@ -205,6 +228,34 @@
                              React.createElement(
                                "input",
                                {className: "form-control", value: options?.optionResourcePools?.[0]?.name || 'None', readOnly: true, disabled: true}
+                             )
+                           )
+                         )
+                       ),
+                       React.createElement(
+                         "div",
+                         {className: "row"},
+                         React.createElement(
+                           "div",
+                           {className: "col-md-6"},
+                           React.createElement(
+                             Field,
+                             {label: "VIP Address"},
+                             React.createElement(
+                               "input",
+                               {className: "form-control", value: data.vip_address || '', readOnly: true, disabled: true}
+                             )
+                           )
+                         ),
+                         React.createElement(
+                           "div",
+                           {className: "col-md-6"},
+                           React.createElement(
+                             Field,
+                             {label: "VIP Subnet"},
+                             React.createElement(
+                               "input",
+                               {className: "form-control", value: vipSubnetDisplay, readOnly: true, disabled: true}
                              )
                            )
                          )
@@ -247,16 +298,64 @@
                          )
                        )
                      ),
-                                                                                                                           tab === 'listener' && React.createElement(
-                        Step2_Listener,
-                        {data: data, update: update}
+                                                                                                                         tab === 'listener' && React.createElement(
+                        "div",
+                        null,
+                        React.createElement(
+                          Step2_Listener,
+                          {data: data, update: update}
+                        ),
+                        React.createElement(
+                          "div",
+                          {className: "form-group", style: { marginTop: 10 }},
+                          React.createElement(
+                            "div",
+                            {className: "col-sm-12"},
+                            React.createElement(
+                              "div",
+                              {className: "checkbox"},
+                              React.createElement(
+                                "label",
+                                null,
+                                React.createElement(
+                                  "input",
+                                  {type: "checkbox", checked: data.listenerAdminStateUp !== false, onChange: e => update('listenerAdminStateUp', e.target.checked)}
+                                ),
+                                " ",
+                                "Admin State Up"
+                              )
+                            )
+                          )
+                        )
                       ),
-                                                                                                                           tab === 'pool' && React.createElement(
+                                                                                                                         tab === 'pool' && React.createElement(
                     "div",
                     null,
                     React.createElement(
                       Step3_Pool,
                       {data: data, update: update}
+                    ),
+                    React.createElement(
+                      "div",
+                      {className: "form-group", style: { marginTop: 10 }},
+                      React.createElement(
+                        "div",
+                        {className: "col-sm-12"},
+                        React.createElement(
+                          "div",
+                          {className: "checkbox"},
+                          React.createElement(
+                            "label",
+                            null,
+                            React.createElement(
+                              "input",
+                              {type: "checkbox", checked: data.poolAdminStateUp !== false, onChange: e => update('poolAdminStateUp', e.target.checked)}
+                            ),
+                            " ",
+                            "Admin State Up"
+                          )
+                        )
+                      )
                     ),
                     React.createElement(
                       "hr",
@@ -269,14 +368,40 @@
                     ),
                     React.createElement(
                       Step4_Members,
-                      {data: data, update: update, options: { instances: [] }}
+                      {data: data, update: update, options: { instances: options?.instances || [] }}
                     )
                   ),
-                                                                                                                           tab === 'monitor' && React.createElement(
-                       Step5_Monitor,
-                       {data: data, update: update}
+                                                                                                                         tab === 'monitor' && React.createElement(
+                       "div",
+                       null,
+                       React.createElement(
+                         Step5_Monitor,
+                         {data: data, update: update}
+                       ),
+                       React.createElement(
+                         "div",
+                         {className: "form-group", style: { marginTop: 10 }},
+                         React.createElement(
+                           "div",
+                           {className: "col-sm-12"},
+                           React.createElement(
+                             "div",
+                             {className: "checkbox"},
+                             React.createElement(
+                               "label",
+                               null,
+                               React.createElement(
+                                 "input",
+                                 {type: "checkbox", checked: data.monitorAdminStateUp !== false, onChange: e => update('monitorAdminStateUp', e.target.checked)}
+                               ),
+                               " ",
+                               "Admin State Up"
+                             )
+                           )
+                         )
+                       )
                      )
-                                                                                                                         )
+                                                                                                                       )
                     )
                   ),
                   React.createElement(

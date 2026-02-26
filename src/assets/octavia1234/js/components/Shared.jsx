@@ -27,7 +27,30 @@ window.Octavia.Toast = ({ msg, type, onClose }) => {
             display: 'flex', alignItems: 'center'
         }}>
             <span style={{ marginRight: 10 }}>{msg}</span>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: 'inherit' }}>&times;</button>
+            <button
+                onClick={onClose}
+                style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'inherit',
+                    padding: 0,
+                    marginLeft: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                }}
+                aria-label="Close"
+            >
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 59.9 59.9"
+                    style={{ width: 14, height: 14 }}
+                >
+                    <line fill="none" stroke="currentColor" strokeMiterlimit="10" x1="57.4" y1="2.5" x2="2.5" y2="57.4"></line>
+                    <line fill="none" stroke="currentColor" strokeMiterlimit="10" x1="2.5" y1="2.5" x2="57.4" y2="57.4"></line>
+                </svg>
+            </button>
         </div>
     );
 };

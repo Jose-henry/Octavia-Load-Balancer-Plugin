@@ -211,21 +211,22 @@ class OctaviaLoadBalancerService {
                  }
             }
             
-            // 2. Update Nested (Listener/Pool) - Fetch current state first
+            // 2. Update Nested (Listener/Pool/Health Monitor) - Fetch current state first
             // Note: This logic assumes single listener/pool for now as per UI
-            if (payload.listenerName || payload.poolName || payload.connectionLimit) {
+            if (payload.listenerName || payload.poolName || payload.connectionLimit || payload.listenerAdminStateUp != null || payload.poolAdminStateUp != null || payload.monitorAdminStateUp != null) {
                  ServiceResponse getResp = get(cloud, projectId, lbId)
                  if (getResp.success) {
                       def lb = getResp.data
                       
                       // Update Listener
-                      if (payload.listenerName || payload.connectionLimit) {
+                      if (payload.listenerName || payload.connectionLimit != null || payload.listenerAdminStateUp != null) {
                           def listeners = lb.listeners
                           if (listeners) {
                               String lisId = listeners[0].id
                               Map lisUpdates = [:]
                               if (payload.listenerName) lisUpdates.name = payload.listenerName
                               if (payload.connectionLimit != null) lisUpdates.connection_limit = payload.connectionLimit
+                              if (payload.listenerAdminStateUp != null) lisUpdates.admin_state_up = payload.listenerAdminStateUp
                               
                               if (lisUpdates) {
                                   ServiceResponse lResp = client.put("/v2.0/lbaas/listeners/${lisId}", [listener: lisUpdates])
@@ -238,14 +239,30 @@ class OctaviaLoadBalancerService {
                       }
                       
                       // Update Pool
-                      if (payload.poolName) {
+                      if (payload.poolName || payload.poolAdminStateUp != null || payload.monitorAdminStateUp != null) {
                           def pools = lb.pools
                           if (pools) {
                               String poolId = pools[0].id
-                              ServiceResponse pResp = client.put("/v2.0/lbaas/pools/${poolId}", [pool: [name: payload.poolName]])
-                              if (!pResp.success) {
-                                  success = false
-                                  errors << "Pool Update: ${pResp.msg ?: pResp.error}"
+                              Map poolUpdates = [:]
+                              if (payload.poolName) poolUpdates.name = payload.poolName
+                              if (payload.poolAdminStateUp != null) poolUpdates.admin_state_up = payload.poolAdminStateUp
+
+                              if (poolUpdates) {
+                                  ServiceResponse pResp = client.put("/v2.0/lbaas/pools/${poolId}", [pool: poolUpdates])
+                                  if (!pResp.success) {
+                                      success = false
+                                      errors << "Pool Update: ${pResp.msg ?: pResp.error}"
+                                  }
+                              }
+
+                              // Update Health Monitor admin_state_up if requested
+                              if (payload.monitorAdminStateUp != null && pools[0].healthmonitor_id) {
+                                  String hmId = pools[0].healthmonitor_id
+                                  ServiceResponse hmResp = client.put("/v2.0/lbaas/healthmonitors/${hmId}", [healthmonitor: [admin_state_up: payload.monitorAdminStateUp]])
+                                  if (!hmResp.success) {
+                                      success = false
+                                      errors << "Health Monitor Update: ${hmResp.msg ?: hmResp.error}"
+                                  }
                               }
                           }
                       }

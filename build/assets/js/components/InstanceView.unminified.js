@@ -10,15 +10,22 @@
                                     {className: "alert alert-danger"},
                                     lbState.error.message
                                   )
-        if (lbState.loading) return React.createElement(
-                                      "div",
-                                      {style: { padding: 20, textAlign: 'center' }},
-                                      React.createElement(
-                                        "span",
-                                        {style: { display: 'inline-block', width: 16, height: 16, border: '2px solid #ccc', borderTopColor: '#333', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}
-                                      ),
-                                      " Loading..."
-                                    )
+        if (lbState.loading) {
+            return (
+                React.createElement(
+                  "div",
+                  {className: "loading-mask"},
+                  React.createElement(
+                    "div",
+                    {className: "text-center"},
+                    React.createElement(
+                      "div",
+                      {className: "ajax-loader"}
+                    )
+                  )
+                )
+            )
+        }
         const lbs = lbState.data?.loadbalancers || []
         if (lbs.length === 0) return React.createElement(
                                        "div",
@@ -70,6 +77,11 @@
                       React.createElement(
                         "th",
                         null,
+                        "Operating"
+                      ),
+                      React.createElement(
+                        "th",
+                        null,
                         "Members"
                       ),
                       React.createElement(
@@ -105,13 +117,21 @@
                                     null,
                                     React.createElement(
                                       Badge,
-                                      {text: lb.provisioning_status || 'ACTIVE', tone: (lb.provisioning_status || 'ACTIVE') === 'ACTIVE' ? 'success' : 'warning'}
+                                      {text: lb.provisioning_status || 'ACTIVE', tone: (lb.provisioning_status || 'ACTIVE') === 'ACTIVE' ? 'success' : (lb.provisioning_status === 'ERROR' ? 'danger' : 'warning')}
                                     )
                                   ),
                                   React.createElement(
                                     "td",
                                     null,
-                                    (lb.members || []).length
+                                    React.createElement(
+                                      Badge,
+                                      {text: lb.operating_status || 'UNKNOWN', tone: lb.operating_status === 'ONLINE' ? 'success' : (lb.operating_status === 'ERROR' ? 'danger' : 'warning')}
+                                    )
+                                  ),
+                                  React.createElement(
+                                    "td",
+                                    null,
+                                    lb.membersCount != null ? lb.membersCount : (lb.members || []).length
                                   ),
                                   React.createElement(
                                     "td",

@@ -15,7 +15,9 @@
         const [deleteTarget, setDeleteTarget] = React.useState(null);
         const [deleting, setDeleting] = React.useState(false);
 
-        const lbState = useAsync(() => Api.listLoadBalancers({ networkId }), [networkId, toast]);
+        const [reloadKey, setReloadKey] = React.useState(0);
+
+        const lbState = useAsync(() => Api.listLoadBalancers({ networkId }), [networkId, reloadKey]);
 
         // Fetch options independently when wizard is opened
         React.useEffect(() => {
@@ -42,7 +44,15 @@
         }, [showWizard, showEdit, networkId]);
 
         if (lbState.error) return <div className="alert alert-danger">{lbState.error.message}</div>;
-        if (lbState.loading) return <div style={{ padding: 20 }}><i className="fa fa-spinner fa-spin"></i> Loading...</div>;
+        if (lbState.loading) {
+            return (
+                <div className="loading-mask">
+                    <div className="text-center">
+                        <div className="ajax-loader"></div>
+                    </div>
+                </div>
+            );
+        }
 
         const lbs = lbState.data.loadbalancers || [];
 
@@ -51,6 +61,7 @@
             Api.deleteLoadBalancer(deleteTarget.id, networkId).then(() => {
                 setDeleting(false);
                 setDeleteTarget(null);
+                setReloadKey(k => k + 1);
                 setToast({ msg: 'Load Balancer deleted successfully.', type: 'success' });
             });
         };
@@ -70,6 +81,7 @@
                         onClose={() => setView('list')}
                         onCreated={() => {
                             setView('list');
+                            setReloadKey(k => k + 1);
                             setToast({ msg: 'Load Balancer created successfully.', type: 'success' });
                         }}
                     />
@@ -77,42 +89,68 @@
                 {view === 'edit' && selectedLb && <EditLBModalComp lb={selectedLb} networkId={networkId} options={{ ...options, subnets }} onClose={() => { setSelectedLb(null); setView('list'); }} onUpdated={() => { setSelectedLb(null); setView('list'); }} />}
 
                 {/* Toolbar — ADD button */}
-                {view === 'list' && (
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '15px' }}>
-                        <button className="btn btn-primary" onClick={() => setView('create')}>
-                            + ADD
-                        </button>
-                    </div>
-                )}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '15px' }}>
+                    <button className="btn btn-primary" onClick={() => setView('create')}>
+                        + ADD
+                    </button>
+                </div>
 
                 {/* Load Balancers Table — uses native Morpheus table classes */}
-                {view === 'list' && (
-                    <table className="table">
-                        <thead>
-                            <tr>
-                                <th>NAME</th>
-                                <th>VIP</th>
-                                <th>STATUS</th>
-                                <th>MEMBERS</th>
+                <table className="table">
+                    <thead>
+                        <tr>
+                            <th>NAME</th>
+                            <th>VIP</th>
+                            <th>STATUS</th>
+                            <th>OPERATING</th>
+                            <th>MEMBERS</th>
+                            <th className="text-right">ACTIONS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {lbs.map(lb => (
+                            <tr key={lb.id}>
+                                <td>{lb.name}</td>
+                                <td>{lb.vip_address}</td>
+                                <td>
+                                    <Badge
+                                        text={lb.provisioning_status}
+                                        tone={lb.provisioning_status === 'ACTIVE' ? 'success' : (lb.provisioning_status === 'ERROR' ? 'danger' : 'warning')}
+                                    />
+                                </td>
+                                <td>
+                                    <Badge
+                                        text={lb.operating_status || 'UNKNOWN'}
+                                        tone={lb.operating_status === 'ONLINE' ? 'success' : (lb.operating_status === 'ERROR' ? 'danger' : 'warning')}
+                                    />
+                                </td>
+                                <td>{lb.membersCount != null ? lb.membersCount : (lb.members || []).length}</td>
+                                <td className="text-right actions">
+                                    <a
+                                        href="#"
+                                        title="Edit"
+                                        className="btn btn-sm btn-link btn-link-icon"
+                                        onClick={e => { e.preventDefault(); setSelectedLb(lb); setView('edit'); }}
+                                    >
+                                        <span className="btn-icon btn-icon-pencil"></span>
+                                    </a>
+
+                                    <a
+                                        href="#"
+                                        title="Delete"
+                                        className="btn btn-sm btn-link btn-link-icon"
+                                        onClick={e => { e.preventDefault(); setDeleteTarget(lb); }}
+                                    >
+                                        <span className="btn-icon btn-icon-trashcan"></span>
+                                    </a>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            {lbs.map(lb => (
-                                <tr key={lb.id}>
-                                    <td>{lb.name}</td>
-                                    <td>{lb.vip_address}</td>
-                                    <td>
-                                        <Badge text={lb.provisioning_status} tone={lb.provisioning_status === 'ACTIVE' ? 'success' : 'warning'} />
-                                    </td>
-                                    <td>{(lb.members || []).length}</td>
-                                </tr>
-                            ))}
-                            {lbs.length === 0 && (
-                                <tr><td colSpan="4" className="text-center text-muted" style={{ padding: '40px 0' }}>No Load Balancers found. Click "+ ADD" to create one.</td></tr>
-                            )}
-                        </tbody>
-                    </table>
-                )}
+                        ))}
+                        {lbs.length === 0 && (
+                            <tr><td colSpan="6" className="text-center text-muted" style={{ padding: '40px 0' }}>No Load Balancers found. Click "+ ADD" to create one.</td></tr>
+                        )}
+                    </tbody>
+                </table>
             </div>
         );
     };

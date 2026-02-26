@@ -6,7 +6,15 @@
         const lbState = useAsync(() => Api.listLoadBalancers({ instanceId }), [instanceId])
 
         if (lbState.error) return <div className="alert alert-danger">{lbState.error.message}</div>
-        if (lbState.loading) return <div style={{ padding: 20, textAlign: 'center' }}><span style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #ccc', borderTopColor: '#333', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}></span> Loading...</div>
+        if (lbState.loading) {
+            return (
+                <div className="loading-mask">
+                    <div className="text-center">
+                        <div className="ajax-loader"></div>
+                    </div>
+                </div>
+            )
+        }
         const lbs = lbState.data?.loadbalancers || []
         if (lbs.length === 0) return <div className="alert alert-info">This instance is not a member of any Load Balancers.</div>
 
@@ -16,7 +24,16 @@
                 <p className="text-muted" style={{ marginBottom: 15, fontSize: '0.9em' }}>This instance is a pool member of the following load balancers. Click a name to manage it on the Network detail page.</p>
                 <div className="table-responsive">
                     <table className="table table-striped table-hover">
-                        <thead><tr style={{ textTransform: 'uppercase', fontSize: '0.85em', fontWeight: 600 }}><th>Name</th><th>VIP</th><th>Status</th><th>Members</th><th>Network</th></tr></thead>
+                        <thead>
+                            <tr style={{ textTransform: 'uppercase', fontSize: '0.85em', fontWeight: 600 }}>
+                                <th>Name</th>
+                                <th>VIP</th>
+                                <th>Status</th>
+                                <th>Operating</th>
+                                <th>Members</th>
+                                <th>Network</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             {lbs.map(lb => (
                                 <tr key={lb.id}>
@@ -28,8 +45,19 @@
                                         </a>
                                     </td>
                                     <td>{lb.vip_address}</td>
-                                    <td><Badge text={lb.provisioning_status || 'ACTIVE'} tone={(lb.provisioning_status || 'ACTIVE') === 'ACTIVE' ? 'success' : 'warning'} /></td>
-                                    <td>{(lb.members || []).length}</td>
+                                    <td>
+                                        <Badge
+                                            text={lb.provisioning_status || 'ACTIVE'}
+                                            tone={(lb.provisioning_status || 'ACTIVE') === 'ACTIVE' ? 'success' : (lb.provisioning_status === 'ERROR' ? 'danger' : 'warning')}
+                                        />
+                                    </td>
+                                    <td>
+                                        <Badge
+                                            text={lb.operating_status || 'UNKNOWN'}
+                                            tone={lb.operating_status === 'ONLINE' ? 'success' : (lb.operating_status === 'ERROR' ? 'danger' : 'warning')}
+                                        />
+                                    </td>
+                                    <td>{lb.membersCount != null ? lb.membersCount : (lb.members || []).length}</td>
                                     <td>
                                         <a href={'/infrastructure/networks/' + (lb.networkId || '')} style={{ color: '#2d6ca2' }}>
                                             {lb.networkName || 'View Network'}
