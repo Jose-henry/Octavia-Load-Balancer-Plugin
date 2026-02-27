@@ -27,7 +27,7 @@ import javax.net.ssl.SSLContext
 class OctaviaAuthService {
 
     // Simple JVM-level cache for Keystone tokens across the plugin.
-    // Key: "cloudId:tenantName", Value: [token: String, loadBalancerApi: String, expiresAt: Long]
+    // Key: "cloudId:tenantName", Value: [token: String, loadBalancerApi: String, networkApi: String, expiresAt: Long]
     private static Map<String, Map> tokenCache = [:]
 
     private final MorpheusContext morpheus
@@ -41,7 +41,7 @@ class OctaviaAuthService {
      * Core method to authenticate and return the required endpoints and active token.
      * @param cloud The Morpheus Cloud (ComputeZone) object
      * @param tenantName The tenant/project name resolved from the Network Context (optional if present in Cloud config)
-     * @return Map containing: [success: boolean, token: String, loadBalancerApi: String, error: String]
+     * @return Map containing: [success: boolean, token: String, loadBalancerApi: String, networkApi: String, error: String]
      */
     Map getAuthToken(Cloud cloud, String tenantName = null) {
         if (!cloud) {
@@ -59,7 +59,7 @@ class OctaviaAuthService {
             // Keystone tokens usually last 1 hour. We cache for 50 minutes (3,000,000 ms)
             if (cb != null && cb.expiresAt > now) {
                 log.debug("Using cached Keystone token for Cloud '{}', Project '{}'", cloud.name, tenantName)
-                return [success: true, token: cb.token, loadBalancerApi: cb.loadBalancerApi]
+                return [success: true, token: cb.token, loadBalancerApi: cb.loadBalancerApi, networkApi: cb.networkApi]
             }
 
             // Step 1: Extract Endpoints and Credentials
@@ -83,13 +83,15 @@ class OctaviaAuthService {
                 tokenCache[cacheKey] = [
                     token: tokenResponse.token,
                     loadBalancerApi: creds.loadBalancerApi,
+                    networkApi: creds.networkApi,
                     expiresAt: System.currentTimeMillis() + 3000000 // 50 mins
                 ]
 
                 return [
                     success: true,
                     token: tokenResponse.token,
-                    loadBalancerApi: creds.loadBalancerApi
+                    loadBalancerApi: creds.loadBalancerApi,
+                    networkApi: creds.networkApi
                 ]
             } else {
                 return tokenResponse
@@ -115,6 +117,7 @@ class OctaviaAuthService {
 
             String identityApi = config.get("identityApi")
             String loadBalancerApi = config.get("loadBalancerApi")
+            String networkApi = config.get("networkApi")
 
             // Keystone payload requirements
             String domainId = config.get("domainId")
@@ -125,6 +128,7 @@ class OctaviaAuthService {
             log.debug("Extracted Credentials for Auth Payload:")
             log.debug("  identityApi: {}", identityApi)
             log.debug("  loadBalancerApi: {}", loadBalancerApi)
+            log.debug("  networkApi: {}", networkApi)
             log.debug("  domainId: {}", domainId)
             log.debug("  projectName (tenant): {}", projectName)
             log.debug("  username: {}", username ? "PRESENT" : "MISSING")
@@ -143,6 +147,7 @@ class OctaviaAuthService {
                 success: true,
                 identityApi: identityApi,
                 loadBalancerApi: loadBalancerApi,
+                networkApi: networkApi,
                 domainId: domainId,
                 projectName: projectName,
                 username: username,

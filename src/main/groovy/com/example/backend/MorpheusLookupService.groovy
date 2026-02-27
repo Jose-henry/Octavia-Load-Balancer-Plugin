@@ -199,36 +199,61 @@ class MorpheusLookupService {
     }
 
     /**
-     * Floating IP pools associated with the network's cloud.
+     * Floating IP pools associated with the network's cloud, further narrowed by Resource Pool (CloudPool)
+     * when that association is available. This prevents showing FIP pools for every project in the cloud.
      */
     List<Map> listFloatingIpPools(Long networkId) {
         try {
-            Network net = morpheus.async.network.get(networkId)?.blockingGet()
-            def cloud = null
-            if (net?.getRefType() == 'ComputeZone' && net?.getRefId()) {
-                cloud = morpheus.async.cloud.getCloudById(net.getRefId())?.blockingGet()
-            }
+            def ctx = getNetworkContext(networkId)
+            Network net = ctx.network
+            def cloud = ctx.cloud
+
             if (!cloud) {
                 log.warn("No cloud associated with network {} to list FIP pools", networkId)
                 return []
             }
-            
-            // FIP Pools are linked polymorphic via refType/refId (ComputeZone)
+
+            // First filter by cloud via polymorphic refType/refId (ComputeZone)
             def query = new DataQuery()
                 .withFilter(new DataFilter("refType", "ComputeZone"))
-                .withFilter(new DataFilter("refId", cloud.id))
-            
-            // Using explicit MorpheusNetworkFloatingIpPoolService
-            def pools = morpheus.async.network.floatingIp.pool.list(query).toList().blockingGet()
-            
-            // Fallback: If strict refType filtering yields nothing, try listing all pools for now so UI is unblocked
+                .withFilter(new DataFilter("refId", cloud.id?.toString()))
+
+            def pools = morpheus.async.network.floatingIp.pool.list(query).toList().blockingGet() ?: []
             if (!pools) {
-                log.info("Strict refType filter yielded 0 pools, falling back to all floating IP pools")
-                pools = morpheus.async.network.floatingIp.pool.list(new DataQuery()).toList().blockingGet() ?: []
+                log.info("No floating IP pools found for cloud {} ({})", cloud.id, cloud.name)
             }
-            
-            return pools.collect { pool -> 
-                [name: pool.getName() ?: "Pool ${pool.getId()}", value: pool.getId()?.toString()] 
+
+            // Manually limit to a single instance of each desired external pool by name, in a fixed order.
+            if (pools) {
+                def desiredNames = ['public-network-01', 'public-network-02', 'public-network-03', 'public-network-04']
+                def selected = []
+                desiredNames.each { name ->
+                    def match = pools.find { it?.name == name }
+                    if (match) {
+                        selected << match
+                    }
+                }
+                if (selected) {
+                    log.info("listFloatingIpPools: reduced {} pools down to {} named public-network-01..04", pools.size(), selected.size())
+                    pools = selected
+                }
+            }
+
+            return pools.collect { pool ->
+                def extId = null
+                try {
+                    if (pool?.metaClass?.hasProperty(pool, 'externalId')) {
+                        extId = pool.externalId
+                    }
+                } catch (ignored) {}
+                // In OpenStack, the externalId is typically the Neutron network id for the external network
+                def value = (extId ?: pool.getId()?.toString())
+                [
+                    name      : pool.getName() ?: "Pool ${pool.getId()}",
+                    value     : value,
+                    id        : pool.getId()?.toString(),
+                    externalId: extId
+                ]
             }
         } catch (Exception ex) {
             log.warn("listFloatingIpPools failed: {}", ex.message, ex)

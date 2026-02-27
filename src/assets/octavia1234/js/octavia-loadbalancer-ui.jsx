@@ -11,6 +11,7 @@ window.Octavia = window.Octavia || {};
 //= require js/components/Api.jsx
 //= require js/components/WizardSteps.jsx
 //= require js/components/DeleteConfirmModal.jsx
+//= require js/components/FloatingIpModal.jsx
 //= require js/components/CreateWizard.jsx
 //= require js/components/EditLBModal.jsx
 //= require js/components/NetworkView.jsx

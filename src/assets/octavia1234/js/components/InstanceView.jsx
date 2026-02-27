@@ -28,6 +28,7 @@
                             <tr style={{ textTransform: 'uppercase', fontSize: '0.85em', fontWeight: 600 }}>
                                 <th>Name</th>
                                 <th>VIP</th>
+                                <th>Description</th>
                                 <th>Status</th>
                                 <th>Operating</th>
                                 <th>Members</th>
@@ -44,7 +45,8 @@
                                             {lb.name}
                                         </a>
                                     </td>
-                                    <td>{lb.vip_address}</td>
+                                    <td>{lb.vip_display || lb.vip_address}</td>
+                                    <td>{lb.description || ''}</td>
                                     <td>
                                         <Badge
                                             text={lb.provisioning_status || 'ACTIVE'}

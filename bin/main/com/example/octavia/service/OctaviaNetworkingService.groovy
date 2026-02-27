@@ -5,7 +5,6 @@ import com.morpheusdata.core.util.HttpApiClient
 import com.morpheusdata.model.Cloud
 import com.morpheusdata.response.ServiceResponse
 import com.example.octavia.client.OctaviaApiClient
-import com.example.octavia.client.OpenStackAuthClient
 import groovy.util.logging.Slf4j
 
 @Slf4j
@@ -78,6 +77,26 @@ class OctaviaNetworkingService {
     }
 
     /**
+     * Show Subnet details by OpenStack UUID.
+     * Neutron API: GET /v2.0/subnets/{subnet_id}
+     * See: https://docs.openstack.org/api-ref/network/v2/#show-subnet-details
+     */
+    ServiceResponse<Map> getSubnet(Cloud cloud, String projectId, String subnetId) {
+        try {
+            OctaviaApiClient client = getClient(cloud, projectId)
+            ServiceResponse response = client.get("/v2.0/subnets/${subnetId}")
+            if (response.success) {
+                return ServiceResponse.success(response.data?.subnet ?: [:])
+            } else {
+                return ServiceResponse.error("Get Subnet failed: ${response.msg ?: response.error}")
+            }
+        } catch (Exception e) {
+            log.error("Error fetching subnet {}: {}", subnetId, e.message, e)
+            return ServiceResponse.error("Error fetching subnet: ${e.message}")
+        }
+    }
+
+    /**
      * Create a new Floating IP in the specified external network.
      * Neutron API: POST /v2.0/floatingips
      * See: https://docs.openstack.org/api-ref/network/v2/index.html#create-floating-ip
@@ -104,14 +123,16 @@ class OctaviaNetworkingService {
     }
 
     private OctaviaApiClient getClient(Cloud cloud, String projectId) {
-        OpenStackAuthClient auth = new OpenStackAuthClient(cloud)
-        Map session = auth.getSession(projectId)
-        
-        String endpoint = session.neutronUrl
-        if (!endpoint) {
-             throw new RuntimeException("No Neutron endpoint found in Keystone catalog for cloud ${cloud.id}")
+        Map session = new OctaviaAuthService(morpheusContext).getAuthToken(cloud, projectId)
+        if (!session?.success) {
+            throw new RuntimeException("Unable to authenticate to OpenStack for Neutron: ${session?.error ?: 'Unknown error'}")
         }
-        
+
+        String endpoint = session.networkApi
+        if (!endpoint) {
+            throw new RuntimeException("No Neutron endpoint (networkApi) configured for cloud ${cloud.id}")
+        }
+
         return new OctaviaApiClient(new HttpApiClient(), endpoint, session.token as String)
     }
 }

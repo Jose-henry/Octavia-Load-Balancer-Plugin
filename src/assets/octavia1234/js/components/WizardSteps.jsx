@@ -52,7 +52,7 @@
     };
 
     // --- Step 2: Listener ---
-    const Step2_Listener = ({ data, update }) => {
+    const Step2_Listener = ({ data, update, hideCreateToggle = false }) => {
         const { Field } = window.Octavia;
         const protocols = ['HTTP', 'HTTPS', 'TERMINATED_HTTPS', 'TCP', 'UDP', 'SCTP'];
         const showHeaders = ['HTTP', 'TERMINATED_HTTPS'].includes(data.listenerProtocol);
@@ -61,7 +61,7 @@
 
         return (
             <div className="form-horizontal">
-                <div className="form-group">
+                {!hideCreateToggle && <div className="form-group">
                     <div className="col-sm-12">
                         <div className="checkbox">
                             <label>
@@ -70,7 +70,7 @@
                             </label>
                         </div>
                     </div>
-                </div>
+                </div>}
                 {data.createListener && <div style={{ borderLeft: '3px solid #ddd', paddingLeft: 15, marginLeft: 5 }}>
                     <div className="row">
                         <div className="col-md-6">
@@ -135,14 +135,14 @@
     };
 
     // --- Step 3: Pool ---
-    const Step3_Pool = ({ data, update }) => {
+    const Step3_Pool = ({ data, update, hideCreateToggle = false }) => {
         const { Field } = window.Octavia;
         const algorithms = ['ROUND_ROBIN', 'LEAST_CONNECTIONS', 'SOURCE_IP'];
         const protocols = ['HTTP', 'HTTPS', 'TCP', 'UDP', 'SCTP'];
 
         return (
             <div className="form-horizontal">
-                <div className="form-group">
+                {!hideCreateToggle && <div className="form-group">
                     <div className="col-sm-12">
                         <div className="checkbox">
                             <label>
@@ -151,7 +151,7 @@
                             </label>
                         </div>
                     </div>
-                </div>
+                </div>}
                 {data.createPool && <div style={{ borderLeft: '3px solid #ddd', paddingLeft: 15, marginLeft: 5 }}>
                     <div className="row">
                         <div className="col-md-6">
@@ -362,12 +362,12 @@
     };
 
     // --- Step 5: Monitor ---
-    const Step5_Monitor = ({ data, update }) => {
+    const Step5_Monitor = ({ data, update, hideCreateToggle = false }) => {
         const { Field } = window.Octavia;
         const types = ['HTTP', 'HTTPS', 'PING', 'TCP', 'TLS-HELLO', 'UDP-CONNECT', 'SCTP'];
         return (
             <div className="form-horizontal">
-                <div className="form-group">
+                {!hideCreateToggle && <div className="form-group">
                     <div className="col-sm-12">
                         <div className="checkbox">
                             <label>
@@ -376,7 +376,7 @@
                             </label>
                         </div>
                     </div>
-                </div>
+                </div>}
                 {data.createMonitor && <div style={{ borderLeft: '3px solid #ddd', paddingLeft: 15, marginLeft: 5 }}>
                     <div className="row">
                         <div className="col-md-6">

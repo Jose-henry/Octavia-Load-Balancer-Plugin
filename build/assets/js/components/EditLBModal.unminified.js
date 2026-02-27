@@ -7,13 +7,7 @@
         const [tab, setTab] = React.useState('general');
         const [data, setData] = React.useState({ ...lb });
 
-        const vipSubnetDisplay = React.useMemo(() => {
-            const vipId = data.vip_subnet_id;
-            if (!vipId) return '';
-            const sub = (options?.subnets || []).find(s => s.value === vipId);
-            if (!sub) return vipId;
-            return sub.cidr ? `${sub.name} (${sub.cidr})` : sub.name;
-        }, [options, data.vip_subnet_id]);
+        const vipSubnetDisplay = data.vip_subnet_display || lb.vip_subnet_display || data.vip_subnet_id || '';
         const [saving, setSaving] = React.useState(false);
         const [validationMsg, setValidationMsg] = React.useState('');
 
@@ -38,6 +32,7 @@
                     const lbInfo = details.loadbalancer;
                     if (lbInfo.vip_address) newD.vip_address = lbInfo.vip_address;
                     if (lbInfo.vip_subnet_id) newD.vip_subnet_id = lbInfo.vip_subnet_id;
+                    if (lbInfo.vip_subnet_display) newD.vip_subnet_display = lbInfo.vip_subnet_display;
                     if (typeof lbInfo.admin_state_up === 'boolean') {
                         newD.admin_state_up = lbInfo.admin_state_up;
                     }
@@ -92,6 +87,18 @@
 
         const update = (field, val) => setData(prev => ({ ...prev, [field]: val }));
 
+        function formatUpdateError(raw) {
+            const isIpAddressError = typeof raw === 'string' && (
+                /IPv4 or IPv6 address/i.test(raw) ||
+                /does not appear to be.*address/i.test(raw)
+            );
+            const hasMembers = (data.members || []).length > 0;
+            if (isIpAddressError && hasMembers) {
+                return raw + ' This often happens when a pool member (same IP and port) is already in use on another load balancer. Try using a different port for that member, or remove it from the other load balancer first.';
+            }
+            return raw.startsWith('Error:') ? raw : 'Error: ' + raw;
+        }
+
         const save = () => {
             setValidationMsg('');
             setSaving(true);
@@ -99,14 +106,16 @@
                 .then(res => {
                     setSaving(false);
                     if (res && res.success === false) {
-                        setValidationMsg('Error: ' + (res.msg || res.error || 'Unknown update error'));
+                        const raw = res.msg || res.error || 'Unknown update error';
+                        setValidationMsg(formatUpdateError(raw));
                     } else {
                         onUpdated();
                     }
                 })
                 .catch(e => {
                     setSaving(false);
-                    setValidationMsg('Error: ' + (e.message || e.error || 'Network error'));
+                    const raw = e.message || e.error || 'Network error';
+                    setValidationMsg(formatUpdateError(raw));
                 });
         };
 
@@ -154,7 +163,12 @@
                       "h4",
                       {className: "modal-title"},
                       "Edit Load Balancer:",
-                      lb.name
+                      ' ',
+                      React.createElement(
+                        "strong",
+                        null,
+                        lb.name
+                      )
                     )
                   ),
                   React.createElement(
@@ -303,7 +317,7 @@
                         null,
                         React.createElement(
                           Step2_Listener,
-                          {data: data, update: update}
+                          {data: data, update: update, hideCreateToggle: true}
                         ),
                         React.createElement(
                           "div",
@@ -333,7 +347,7 @@
                     null,
                     React.createElement(
                       Step3_Pool,
-                      {data: data, update: update}
+                      {data: data, update: update, hideCreateToggle: true}
                     ),
                     React.createElement(
                       "div",
@@ -376,7 +390,7 @@
                        null,
                        React.createElement(
                          Step5_Monitor,
-                         {data: data, update: update}
+                         {data: data, update: update, hideCreateToggle: true}
                        ),
                        React.createElement(
                          "div",

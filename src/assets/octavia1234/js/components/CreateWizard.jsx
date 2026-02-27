@@ -94,16 +94,29 @@
                 .then(res => {
                     setLoading(false);
                     if (res && res.success === false) {
-                        setValidationMsg('Error: ' + (res.msg || res.error || 'Unknown error occurred'));
+                        const raw = res.msg || res.error || 'Unknown error occurred';
+                        setValidationMsg(formatCreateError(raw));
                     } else {
                         onCreated();
                     }
                 })
                 .catch(e => {
                     setLoading(false);
-                    setValidationMsg('Error: ' + (e.message || e.error || 'Network error'));
+                    const raw = e.message || e.error || 'Network error';
+                    setValidationMsg(formatCreateError(raw));
                 });
         };
+
+        function formatCreateError(raw) {
+            const isIpAddressError = typeof raw === 'string' && (
+                /IPv4 or IPv6 address/i.test(raw) ||
+                /does not appear to be.*address/i.test(raw)
+            );
+            if (isIpAddressError && (data.members || []).length > 0) {
+                return raw + ' This often happens when a pool member (same IP and port) is already in use on another load balancer. Try using a different port for that member, or remove it from the other load balancer first.';
+            }
+            return raw.startsWith('Error:') ? raw : 'Error: ' + raw;
+        }
 
         const renderStep = () => {
             switch (step) {

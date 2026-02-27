@@ -16,16 +16,18 @@
         const [deleting, setDeleting] = React.useState(false);
 
         const [reloadKey, setReloadKey] = React.useState(0);
+        const [inlineLbs, setInlineLbs] = React.useState(null);
+        const [floatingTarget, setFloatingTarget] = React.useState(null);
 
         const lbState = useAsync(() => Api.listLoadBalancers({ networkId }), [networkId, reloadKey]);
 
-        // Fetch options independently when wizard is opened
+        // Fetch options when wizard or edit is opened
         React.useEffect(() => {
             if (showWizard || showEdit) {
                 const ctx = { networkId };
 
                 Api.getSubnets(networkId).then(res => {
-                    const mapped = (res?.data || []).map(s => ({ name: s.name, value: s.value, cidr: s.cidr }));
+                    const mapped = (res?.data || []).map(s => ({ name: s.name, value: s.value, cidr: s.cidr, id: s.id, externalId: s.externalId }));
                     setSubnets(mapped);
                 }).catch(e => console.error("Error fetching subnets:", e));
 
@@ -38,13 +40,21 @@
                 }).catch(e => console.error(e));
 
                 Api.getFloatingIpPools(ctx).then(res => {
-                    setOptions(o => ({ ...o, optionFloatingIpPools: res.data || [] }));
+                    setOptions(o => ({ ...o, floatingIpPools: res.floatingIpPools || [], availableFloatingIps: res.availableFloatingIps || [] }));
                 }).catch(e => console.error(e));
             }
         }, [showWizard, showEdit, networkId]);
 
+        // Background-fetch floating IP pools once per network so the cog modal opens fast
+        React.useEffect(() => {
+            const ctx = { networkId };
+            Api.getFloatingIpPools(ctx).then(res => {
+                setOptions(o => ({ ...o, floatingIpPools: res.floatingIpPools || [], availableFloatingIps: res.availableFloatingIps || [] }));
+            }).catch(e => console.error(e));
+        }, [networkId]);
+
         if (lbState.error) return <div className="alert alert-danger">{lbState.error.message}</div>;
-        if (lbState.loading) {
+        if (lbState.loading && !inlineLbs) {
             return (
                 <div className="loading-mask">
                     <div className="text-center">
@@ -54,7 +64,7 @@
             );
         }
 
-        const lbs = lbState.data.loadbalancers || [];
+        const lbs = inlineLbs || lbState.data.loadbalancers || [];
 
         const handleDelete = () => {
             setDeleting(true);
@@ -69,11 +79,33 @@
         const CreateWizardComp = window.Octavia.CreateWizard;
         const EditLBModalComp = window.Octavia.EditLBModal;
         const DeleteConfirmModalComp = window.Octavia.DeleteConfirmModal;
+        const FloatingIpModalComp = window.Octavia.FloatingIpModal;
 
         return (
             <div>
                 {toast && <Toast msg={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
                 {deleteTarget && <DeleteConfirmModalComp lb={deleteTarget} loading={deleting} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} />}
+                {floatingTarget && (
+                    <FloatingIpModalComp
+                        lb={floatingTarget}
+                        options={options}
+                        onClose={() => setFloatingTarget(null)}
+                        onAttach={(selection) => {
+                            return Api.attachFloatingIp(floatingTarget.id, selection, networkId)
+                                .then(() => {
+                                    setFloatingTarget(null);
+                                    // Refresh list in background without triggering global loader
+                                    return Api.listLoadBalancers({ networkId }).then(r => {
+                                        setInlineLbs(r.loadbalancers || r.data?.loadbalancers || []);
+                                        setToast({ msg: 'Floating IP attached successfully.', type: 'success' });
+                                    });
+                                })
+                                .catch(err => {
+                                    setToast({ msg: err.message || 'Failed to attach Floating IP.', type: 'danger' });
+                                });
+                        }}
+                    />
+                )}
                 {view === 'create' && (
                     <CreateWizardComp
                         networkId={networkId}
@@ -101,6 +133,7 @@
                         <tr>
                             <th>NAME</th>
                             <th>VIP</th>
+                            <th>DESCRIPTION</th>
                             <th>STATUS</th>
                             <th>OPERATING</th>
                             <th>MEMBERS</th>
@@ -111,7 +144,8 @@
                         {lbs.map(lb => (
                             <tr key={lb.id}>
                                 <td>{lb.name}</td>
-                                <td>{lb.vip_address}</td>
+                                <td>{lb.vip_display || lb.vip_address}</td>
+                                <td>{lb.description || ''}</td>
                                 <td>
                                     <Badge
                                         text={lb.provisioning_status}
@@ -143,11 +177,69 @@
                                     >
                                         <span className="btn-icon btn-icon-trashcan"></span>
                                     </a>
+
+                                    <div className="dropdown" style={{ display: 'inline-block', marginLeft: 4 }}>
+                                        <a
+                                            href="#"
+                                            className="btn btn-sm btn-link btn-link-icon"
+                                            data-toggle="dropdown"
+                                            aria-haspopup="true"
+                                            aria-expanded="false"
+                                            onClick={e => e.preventDefault()}
+                                        >
+                                            <span className="glyphicon glyphicon-cog"></span>
+                                            <span className="caret"></span>
+                                        </a>
+
+                                        <ul
+                                            className="dropdown-menu view-options dropdown-menu-right"
+                                            role="menu"
+                                            aria-labelledby="dlabel"
+                                            data-key="view-options"
+                                        >
+                                            {lb.vip_floating ? (
+                                                <li>
+                                                    <a
+                                                        href="#"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            Api.detachFloatingIp(lb.id, networkId)
+                                                                .then(() => {
+                                                                    // Refresh list in background without global loader
+                                                                    return Api.listLoadBalancers({ networkId }).then(r => {
+                                                                        setInlineLbs(r.loadbalancers || r.data?.loadbalancers || []);
+                                                                        setToast({ msg: 'Floating IP detached successfully.', type: 'success' });
+                                                                    });
+                                                                })
+                                                                .catch(err => {
+                                                                    setToast({ msg: err.message || 'Failed to detach Floating IP.', type: 'danger' });
+                                                                });
+                                                        }}
+                                                    >
+                                                        Detach Floating IP
+                                                    </a>
+                                                </li>
+                                            ) : (
+                                                <li>
+                                                    <a
+                                                        href="#"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            // Open modal immediately; background options are already prefetched
+                                                            setFloatingTarget(lb);
+                                                        }}
+                                                    >
+                                                        Attach Floating IP
+                                                    </a>
+                                                </li>
+                                            )}
+                                        </ul>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
                         {lbs.length === 0 && (
-                            <tr><td colSpan="6" className="text-center text-muted" style={{ padding: '40px 0' }}>No Load Balancers found. Click "+ ADD" to create one.</td></tr>
+                            <tr><td colSpan="7" className="text-center text-muted" style={{ padding: '40px 0' }}>No Load Balancers found. Click "+ ADD" to create one.</td></tr>
                         )}
                     </tbody>
                 </table>

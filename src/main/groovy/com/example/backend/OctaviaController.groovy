@@ -324,6 +324,27 @@ class OctaviaController implements PluginController {
 
             def apiList = apiResult.data ?: []
 
+            // Map any Floating IPs to LB vip_port_id so we can display internal/external VIP in UI.
+            Map<String, String> floatingIpByPortId = [:]
+            try {
+                def fipsResp = networkingService.listFloatingIps(cloud, tenantName, [:])
+                if (fipsResp.success) {
+                    def fips = fipsResp.data ?: []
+                    fips.each { f ->
+                        def portId = f.port_id
+                        def addr = f.floating_ip_address
+                        if (portId && addr) {
+                            floatingIpByPortId[portId.toString()] = addr.toString()
+                        }
+                    }
+                    log.info("loadbalancers(): mapped {} floating IP associations by port_id", floatingIpByPortId.size())
+                } else {
+                    log.warn("loadbalancers(): failed to list floating IPs: {}", fipsResp.msg ?: fipsResp.error)
+                }
+            } catch (Exception fipEx) {
+                log.warn("loadbalancers(): error mapping floating IPs: {}", fipEx.message)
+            }
+
             // Kick off background sync to Morpheus DB using the same API payload
             Thread.start {
                 try {
@@ -362,10 +383,17 @@ class OctaviaController implements PluginController {
                 log.info("Mapped LB {} ({}) with provisioning_status={}, operating_status={}, memberCount={}",
                         lb.name, lb.id, lb.provisioning_status, lb.operating_status, memberCount)
 
+                def vipPortId = (lb.vip_port_id ?: lb.vipPortId)?.toString()
+                def externalVip = vipPortId ? floatingIpByPortId[vipPortId] : null
+                def vipDisplay = externalVip ? "${lb.vip_address}/${externalVip}" : lb.vip_address
+
                 [
                     id                 : lb.id,
                     name               : lb.name,
                     vip_address        : lb.vip_address,
+                    vip_subnet_id      : lb.vip_subnet_id,
+                    vip_floating       : externalVip,
+                    vip_display        : vipDisplay,
                     provisioning_status: lb.provisioning_status,
                     operating_status   : lb.operating_status,
                     description        : lb.description,
@@ -381,6 +409,29 @@ class OctaviaController implements PluginController {
             log.error("loadbalancers() failed: {}", ex.message, ex)
             return JsonResponse.of([success: false, error: ex.message])
         }
+    }
+
+    /**
+     * Resolve a VIP subnet UUID to a display string "SubnetName (CIDR)" via the Neutron API.
+     * Results are cached in the provided map to avoid redundant calls for the same subnet.
+     */
+    private String resolveSubnetDisplay(def cloud, String tenantName, String subnetId, Map<String, String> cache) {
+        if (!subnetId) return null
+        if (cache.containsKey(subnetId)) return cache[subnetId]
+        try {
+            def resp = networkingService.getSubnet(cloud, tenantName, subnetId)
+            if (resp.success && resp.data) {
+                def name = resp.data.name ?: subnetId
+                def cidr = resp.data.cidr
+                def display = cidr ? "${name} (${cidr})" : name
+                cache[subnetId] = display
+                return display
+            }
+        } catch (Exception e) {
+            log.warn("Failed to resolve subnet {}: {}", subnetId, e.message)
+        }
+        cache[subnetId] = null
+        return null
     }
 
     private String mapMorpheusStatusToOctavia(String morpheusStatus) {
@@ -463,6 +514,31 @@ class OctaviaController implements PluginController {
                 return JsonResponse.of([success: false, error: 'Missing cloud context or LB id'])
             }
 
+            // Detach any floating IP before deleting, so it doesn't become orphaned in Neutron
+            try {
+                def lbResp = lbService.get(cloud, tenantName, lbId.toString())
+                if (lbResp.success) {
+                    def vipPortId = (lbResp.data?.vip_port_id ?: lbResp.data?.vipPortId)?.toString()
+                    if (vipPortId) {
+                        def fipsResp = networkingService.listFloatingIps(cloud, tenantName, [:])
+                        if (fipsResp.success) {
+                            def fip = (fipsResp.data ?: []).find { it?.port_id?.toString() == vipPortId }
+                            if (fip?.id) {
+                                log.info("loadbalancersDelete(): detaching floating IP {} from port {} before delete", fip.id, vipPortId)
+                                def detachResp = networkingService.disassociateFloatingIp(cloud, tenantName, fip.id.toString())
+                                if (detachResp.success) {
+                                    log.info("loadbalancersDelete(): floating IP {} disassociated successfully", fip.id)
+                                } else {
+                                    log.warn("loadbalancersDelete(): failed to disassociate floating IP {}: {}", fip.id, detachResp.msg ?: detachResp.error)
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (Exception fipEx) {
+                log.warn("loadbalancersDelete(): error during floating IP cleanup for LB {}: {}", lbId, fipEx.message)
+            }
+
             def result = lbService.delete(cloud, tenantName, lbId)
             log.info("loadbalancersDelete() response: success={}, msg={}, error={}", result.success, result.msg, result.error)
             if (result.success) {
@@ -505,6 +581,7 @@ class OctaviaController implements PluginController {
                 return JsonResponse.of([success: false, error: 'Missing cloud context or LB id'])
             }
 
+            log.info("loadbalancerDetails() fetching LB {} details from Octavia", lbId)
             // Fetch full LB details from Octavia
             def lbResp = lbService.get(cloud, tenantName, lbId)
             if (!lbResp.success) {
@@ -512,9 +589,21 @@ class OctaviaController implements PluginController {
             }
 
             def lb = lbResp.data
+            log.info("loadbalancerDetails() LB {} base response: vip_address={}, vip_subnet_id={}, listeners={}, pools={}",
+                lbId, lb?.vip_address, lb?.vip_subnet_id, (lb?.listeners?.size() ?: 0), (lb?.pools?.size() ?: 0))
 
-            // Enrich with pools, members, and health monitor where possible
+            // Enrich with listeners, pools, members, and health monitor where possible
             try {
+                // Always pull listeners via the dedicated endpoint so the UI has full listener objects
+                def listenersResp = poolService.listListeners(cloud, tenantName, lbId)
+                if (listenersResp.success) {
+                    def listeners = listenersResp.data ?: []
+                    lb.listeners = listeners
+                    log.info("loadbalancerDetails() LB {} listeners fetched: {}", lbId, listeners.size())
+                } else {
+                    log.warn("loadbalancerDetails: failed to list listeners for LB {}: {}", lbId, listenersResp.msg ?: listenersResp.error)
+                }
+
                 def poolsResp = poolService.listPools(cloud, tenantName, lbId)
                 if (poolsResp.success) {
                     def pools = poolsResp.data ?: []
@@ -524,6 +613,7 @@ class OctaviaController implements PluginController {
                             def memResp = poolService.listMembers(cloud, tenantName, poolId)
                             if (memResp.success) {
                                 p.members = memResp.data ?: []
+                                log.info("loadbalancerDetails() LB {} pool {} members fetched: {}", lbId, poolId, p.members.size())
                             } else {
                                 log.warn("loadbalancerDetails: failed to list members for pool {} of LB {}: {}", poolId, lbId, memResp.msg ?: memResp.error)
                             }
@@ -532,6 +622,7 @@ class OctaviaController implements PluginController {
                                 def hmResp = poolService.getHealthMonitor(cloud, tenantName, p.healthmonitor_id as String)
                                 if (hmResp.success) {
                                     p.healthmonitor = hmResp.data
+                                    log.info("loadbalancerDetails() LB {} pool {} healthmonitor fetched: {}", lbId, poolId, p.healthmonitor_id)
                                 } else {
                                     log.warn("loadbalancerDetails: failed to fetch health monitor {} for pool {}: {}", p.healthmonitor_id, poolId, hmResp.msg ?: hmResp.error)
                                 }
@@ -544,6 +635,15 @@ class OctaviaController implements PluginController {
                 }
             } catch (Exception ex2) {
                 log.warn("loadbalancerDetails: error enriching LB {} with pools/members/monitor: {}", lbId, ex2.message)
+            }
+
+            // Resolve subnet UUID to human-readable name
+            if (lb.vip_subnet_id) {
+                Map<String, String> cache = [:]
+                def display = resolveSubnetDisplay(cloud, tenantName, lb.vip_subnet_id as String, cache)
+                if (display) {
+                    lb.vip_subnet_display = display
+                }
             }
 
             return JsonResponse.of([success: true, loadbalancer: lb])
@@ -597,7 +697,7 @@ class OctaviaController implements PluginController {
         try {
             def payload = parseRequestBody(model)
             def lbId = payload.lbId
-            def fipPoolId = payload.floatingIpPoolId
+            def selection = payload.floatingIpPoolId ?: payload.selection ?: payload.floatingSelection
 
             if (isMockMode()) {
                 return JsonResponse.of([success: true, message: 'Floating IP attached (mock)'])
@@ -605,14 +705,52 @@ class OctaviaController implements PluginController {
 
             def ctx = resolveContext(model)
             def cloud = ctx.cloud
-            def project = ctx.project
-            if (!cloud || !lbId || !fipPoolId) {
+            def pool = ctx.pool
+            String tenantName = pool?.externalId ?: pool?.name
+            if (!cloud || !lbId || !selection) {
                 return JsonResponse.of([success: false, error: 'Missing required parameters'])
             }
 
-            // Get the LB's VIP port to associate the floating IP
-            def result = networkingService.associateFloatingIp(cloud, project?.externalId, lbId, fipPoolId)
-            return JsonResponse.of(result)
+            // Resolve the LB VIP port id
+            def lbResp = lbService.get(cloud, tenantName, lbId.toString())
+            if (!lbResp.success) {
+                return JsonResponse.of([success: false, error: lbResp.msg ?: lbResp.error ?: "Failed to fetch LB ${lbId}"])
+            }
+            def vipPortId = (lbResp.data?.vip_port_id ?: lbResp.data?.vipPortId)?.toString()
+            if (!vipPortId) {
+                return JsonResponse.of([success: false, error: "Load balancer ${lbId} has no vip_port_id; cannot attach floating IP"])
+            }
+
+            String fipId = null
+            Map createdFip = null
+            if (selection.toString().startsWith('pool:')) {
+                def externalNetworkId = selection.toString().substring('pool:'.length())
+                log.info("floatingipAttach(): creating new Floating IP in external network {}", externalNetworkId)
+                def createResp = networkingService.createFloatingIp(cloud, tenantName, externalNetworkId)
+                if (!createResp.success) {
+                    return JsonResponse.of([success: false, error: createResp.msg ?: createResp.error ?: "Failed to create floating IP"])
+                }
+                createdFip = createResp.data
+                fipId = createdFip?.id?.toString()
+            } else if (selection.toString().startsWith('fip:')) {
+                fipId = selection.toString().substring('fip:'.length())
+            } else {
+                // Back-compat: if UI sends a raw id assume it's a floatingip id
+                fipId = selection.toString()
+            }
+
+            if (!fipId) {
+                return JsonResponse.of([success: false, error: "No floating IP id resolved from selection ${selection}"])
+            }
+
+            log.info("floatingipAttach(): associating floating IP {} to port {}", fipId, vipPortId)
+            def assocResp = networkingService.associateFloatingIp(cloud, tenantName, fipId, vipPortId)
+            if (!assocResp.success) {
+                return JsonResponse.of([success: false, error: assocResp.msg ?: assocResp.error ?: "Failed to associate floating IP"])
+            }
+
+            def attached = assocResp.data ?: createdFip
+            return JsonResponse.of([success: true, floatingip: attached])
         } catch (Exception ex) {
             log.error("floatingipAttach() failed: {}", ex.message, ex)
             return JsonResponse.of([success: false, error: ex.message])
@@ -631,13 +769,36 @@ class OctaviaController implements PluginController {
 
             def ctx = resolveContext(model)
             def cloud = ctx.cloud
-            def project = ctx.project
+            def pool = ctx.pool
+            String tenantName = pool?.externalId ?: pool?.name
             if (!cloud || !lbId) {
                 return JsonResponse.of([success: false, error: 'Missing required parameters'])
             }
 
-            def result = networkingService.disassociateFloatingIp(cloud, project?.externalId, lbId)
-            return JsonResponse.of(result)
+            def lbResp = lbService.get(cloud, tenantName, lbId.toString())
+            if (!lbResp.success) {
+                return JsonResponse.of([success: false, error: lbResp.msg ?: lbResp.error ?: "Failed to fetch LB ${lbId}"])
+            }
+            def vipPortId = (lbResp.data?.vip_port_id ?: lbResp.data?.vipPortId)?.toString()
+            if (!vipPortId) {
+                return JsonResponse.of([success: true, message: "No vip_port_id on LB ${lbId}; nothing to detach"])
+            }
+
+            // Find the floating IP currently associated with this VIP port id
+            def fipsResp = networkingService.listFloatingIps(cloud, tenantName, [:])
+            if (!fipsResp.success) {
+                return JsonResponse.of([success: false, error: fipsResp.msg ?: fipsResp.error ?: "Failed to list floating IPs"])
+            }
+            def fip = (fipsResp.data ?: []).find { it?.port_id?.toString() == vipPortId }
+            if (!fip?.id) {
+                return JsonResponse.of([success: true, message: "No floating IP attached to LB ${lbId}"])
+            }
+            log.info("floatingipDetach(): disassociating floating IP {} from port {}", fip.id, vipPortId)
+            def result = networkingService.disassociateFloatingIp(cloud, tenantName, fip.id.toString())
+            if (!result.success) {
+                return JsonResponse.of([success: false, error: result.msg ?: result.error ?: "Failed to detach floating IP"])
+            }
+            return JsonResponse.of([success: true, floatingip: result.data])
         } catch (Exception ex) {
             log.error("floatingipDetach() failed: {}", ex.message, ex)
             return JsonResponse.of([success: false, error: ex.message])
@@ -712,13 +873,29 @@ class OctaviaController implements PluginController {
                 log.info("Mapping {} subnets for network ID: {}", subnetsList.size(), ctx.network?.id)
                 def subnets = subnetsList.collect { sub ->
                     // Use the explicit sub model getters
-                    [name: sub.getName() ?: sub.getExternalId(), value: sub.getExternalId() ?: sub.getId()?.toString(), cidr: sub.getCidr()]
+                    def externalId = sub.getExternalId()
+                    def id = sub.getId()
+                    [
+                        name      : sub.getName() ?: externalId ?: id?.toString(),
+                        value     : externalId ?: id?.toString(),
+                        cidr      : sub.getCidr(),
+                        id        : id?.toString(),
+                        externalId: externalId
+                    ]
                 }
                 return JsonResponse.of([data: subnets])
             } else if (ctx.network) {
                 log.warn("No subnets found for network ID {}, falling back to Network itself", ctx.network.id)
                 def net = ctx.network
-                def subnets = [[name: net.getName() ?: 'Network', value: net.getExternalId(), cidr: net.getCidr()]]
+                def netExt = net.getExternalId()
+                def netId = net.getId()
+                def subnets = [[
+                    name      : net.getName() ?: 'Network',
+                    value     : netExt ?: netId?.toString(),
+                    cidr      : net.getCidr(),
+                    id        : netId?.toString(),
+                    externalId: netExt
+                ]]
                 return JsonResponse.of([data: subnets])
             }
             
@@ -753,18 +930,47 @@ class OctaviaController implements PluginController {
         log.info("optionFloatingIpPools() handler called")
         try {
             if (isMockMode()) {
-                return JsonResponse.of([floatingIpPools: [[name: 'ext-net', value: 'ext-net-1']]])
+                return JsonResponse.of([
+                    floatingIpPools: [[name: 'ext-net', value: 'pool:ext-net-1']],
+                    availableFloatingIps: [[name: '102.88.134.100', value: 'fip:fip-mock-1']]
+                ])
             }
 
             def networkIdStr = getParam(model, 'networkId')
             if (networkIdStr) {
-                def pools = lookupService.listFloatingIpPools(Long.parseLong(networkIdStr))
-                return JsonResponse.of([floatingIpPools: pools])
+                def ctx = resolveContext(model)
+                def cloud = ctx.cloud
+                def pool = ctx.pool
+                String tenantName = pool?.externalId ?: pool?.name
+
+                def pools = lookupService.listFloatingIpPools(Long.parseLong(networkIdStr)) ?: []
+                def poolOptions = pools.collect { p ->
+                    def ext = p.externalId ?: p.value
+                    [name: p.name, value: "pool:${ext}", externalId: ext, id: p.id]
+                }
+
+                def available = []
+                if (cloud && tenantName) {
+                    try {
+                        def fipsResp = networkingService.listFloatingIps(cloud, tenantName, [:])
+                        if (fipsResp.success) {
+                            available = (fipsResp.data ?: [])
+                                .findAll { f -> !f?.port_id && f?.floating_ip_address }
+                                .collect { f -> [name: f.floating_ip_address, value: "fip:${f.id}", id: f.id, address: f.floating_ip_address] }
+                        } else {
+                            log.warn("optionFloatingIpPools(): failed to list floating IPs: {}", fipsResp.msg ?: fipsResp.error)
+                        }
+                    } catch (Exception fex) {
+                        log.warn("optionFloatingIpPools(): error listing available floating IPs: {}", fex.message)
+                    }
+                }
+
+                return JsonResponse.of([floatingIpPools: poolOptions, availableFloatingIps: available])
             }
-            return JsonResponse.of([floatingIpPools: []])
+            return JsonResponse.of([floatingIpPools: [], availableFloatingIps: []])
         } catch (Exception ex) {
             log.error("optionFloatingIpPools() failed: {}", ex.message, ex)
-            return JsonResponse.of([floatingIpPools: []])
+            return JsonResponse.of([floatingIpPools: [], availableFloatingIps: []])
         }
     }
 }

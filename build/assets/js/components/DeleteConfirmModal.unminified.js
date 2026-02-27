@@ -44,6 +44,7 @@ const DeleteConfirmModal = ({ lb, onClose, onConfirm, loading }) => (
               "p",
               null,
               "Are you sure you want to delete",
+              ' ',
               React.createElement(
                 "strong",
                 null,

@@ -72,6 +72,11 @@
                       React.createElement(
                         "th",
                         null,
+                        "Description"
+                      ),
+                      React.createElement(
+                        "th",
+                        null,
                         "Status"
                       ),
                       React.createElement(
@@ -110,7 +115,12 @@
                                   React.createElement(
                                     "td",
                                     null,
-                                    lb.vip_address
+                                    lb.vip_display || lb.vip_address
+                                  ),
+                                  React.createElement(
+                                    "td",
+                                    null,
+                                    lb.description || ''
                                   ),
                                   React.createElement(
                                     "td",

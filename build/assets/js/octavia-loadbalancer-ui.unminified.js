@@ -201,7 +201,7 @@ window.Octavia = window.Octavia || {};
                     return { monitor };
                 }),
 
-            attachFloatingIp: (lbId, fipPoolId, networkId) => apiFetch(`${baseUrl}/floatingipAttach`, { method: 'POST', body: JSON.stringify({ lbId, floatingIpPoolId: fipPoolId, networkId }) }),
+            attachFloatingIp: (lbId, selection, networkId) => apiFetch(`${baseUrl}/floatingipAttach`, { method: 'POST', body: JSON.stringify({ lbId, floatingIpPoolId: selection, networkId }) }),
 
             detachFloatingIp: (lbId, networkId) => apiFetch(`${baseUrl}/floatingipDetach`, { method: 'POST', body: JSON.stringify({ lbId, networkId }) }),
 
@@ -361,7 +361,7 @@ window.Octavia = window.Octavia || {};
     };
 
     // --- Step 2: Listener ---
-    const Step2_Listener = ({ data, update }) => {
+    const Step2_Listener = ({ data, update, hideCreateToggle = false }) => {
         const { Field } = window.Octavia;
         const protocols = ['HTTP', 'HTTPS', 'TERMINATED_HTTPS', 'TCP', 'UDP', 'SCTP'];
         const showHeaders = ['HTTP', 'TERMINATED_HTTPS'].includes(data.listenerProtocol);
@@ -372,31 +372,31 @@ window.Octavia = window.Octavia || {};
             React.createElement(
               "div",
               {className: "form-horizontal"},
-              React.createElement(
-                "div",
-                {className: "form-group"},
-                React.createElement(
-                  "div",
-                  {className: "col-sm-12"},
-                  React.createElement(
-                    "div",
-                    {className: "checkbox"},
-                    React.createElement(
-                      "label",
-                      null,
-                      React.createElement(
-                        "input",
-                        {type: "checkbox", checked: data.createListener, onChange: e => update('createListener', e.target.checked)}
-                      ),
-                      React.createElement(
-                        "strong",
-                        null,
-                        "Create Listener"
-                      )
-                    )
-                  )
-                )
-              ),
+              !hideCreateToggle && React.createElement(
+                       "div",
+                       {className: "form-group"},
+                       React.createElement(
+                         "div",
+                         {className: "col-sm-12"},
+                         React.createElement(
+                           "div",
+                           {className: "checkbox"},
+                           React.createElement(
+                             "label",
+                             null,
+                             React.createElement(
+                               "input",
+                               {type: "checkbox", checked: data.createListener, onChange: e => update('createListener', e.target.checked)}
+                             ),
+                             React.createElement(
+                               "strong",
+                               null,
+                               "Create Listener"
+                             )
+                           )
+                         )
+                       )
+                     ),
               data.createListener && React.createElement(
                          "div",
                          {style: { borderLeft: '3px solid #ddd', paddingLeft: 15, marginLeft: 5 }},
@@ -604,7 +604,7 @@ window.Octavia = window.Octavia || {};
     };
 
     // --- Step 3: Pool ---
-    const Step3_Pool = ({ data, update }) => {
+    const Step3_Pool = ({ data, update, hideCreateToggle = false }) => {
         const { Field } = window.Octavia;
         const algorithms = ['ROUND_ROBIN', 'LEAST_CONNECTIONS', 'SOURCE_IP'];
         const protocols = ['HTTP', 'HTTPS', 'TCP', 'UDP', 'SCTP'];
@@ -613,31 +613,31 @@ window.Octavia = window.Octavia || {};
             React.createElement(
               "div",
               {className: "form-horizontal"},
-              React.createElement(
-                "div",
-                {className: "form-group"},
-                React.createElement(
-                  "div",
-                  {className: "col-sm-12"},
-                  React.createElement(
-                    "div",
-                    {className: "checkbox"},
-                    React.createElement(
-                      "label",
-                      null,
-                      React.createElement(
-                        "input",
-                        {type: "checkbox", checked: data.createPool, onChange: e => update('createPool', e.target.checked)}
-                      ),
-                      React.createElement(
-                        "strong",
-                        null,
-                        "Create Pool"
-                      )
-                    )
-                  )
-                )
-              ),
+              !hideCreateToggle && React.createElement(
+                       "div",
+                       {className: "form-group"},
+                       React.createElement(
+                         "div",
+                         {className: "col-sm-12"},
+                         React.createElement(
+                           "div",
+                           {className: "checkbox"},
+                           React.createElement(
+                             "label",
+                             null,
+                             React.createElement(
+                               "input",
+                               {type: "checkbox", checked: data.createPool, onChange: e => update('createPool', e.target.checked)}
+                             ),
+                             React.createElement(
+                               "strong",
+                               null,
+                               "Create Pool"
+                             )
+                           )
+                         )
+                       )
+                     ),
               data.createPool && React.createElement(
                      "div",
                      {style: { borderLeft: '3px solid #ddd', paddingLeft: 15, marginLeft: 5 }},
@@ -1104,38 +1104,38 @@ window.Octavia = window.Octavia || {};
     };
 
     // --- Step 5: Monitor ---
-    const Step5_Monitor = ({ data, update }) => {
+    const Step5_Monitor = ({ data, update, hideCreateToggle = false }) => {
         const { Field } = window.Octavia;
         const types = ['HTTP', 'HTTPS', 'PING', 'TCP', 'TLS-HELLO', 'UDP-CONNECT', 'SCTP'];
         return (
             React.createElement(
               "div",
               {className: "form-horizontal"},
-              React.createElement(
-                "div",
-                {className: "form-group"},
-                React.createElement(
-                  "div",
-                  {className: "col-sm-12"},
-                  React.createElement(
-                    "div",
-                    {className: "checkbox"},
-                    React.createElement(
-                      "label",
-                      null,
-                      React.createElement(
-                        "input",
-                        {type: "checkbox", checked: data.createMonitor, onChange: e => update('createMonitor', e.target.checked)}
-                      ),
-                      React.createElement(
-                        "strong",
-                        null,
-                        "Create Health Monitor"
-                      )
-                    )
-                  )
-                )
-              ),
+              !hideCreateToggle && React.createElement(
+                       "div",
+                       {className: "form-group"},
+                       React.createElement(
+                         "div",
+                         {className: "col-sm-12"},
+                         React.createElement(
+                           "div",
+                           {className: "checkbox"},
+                           React.createElement(
+                             "label",
+                             null,
+                             React.createElement(
+                               "input",
+                               {type: "checkbox", checked: data.createMonitor, onChange: e => update('createMonitor', e.target.checked)}
+                             ),
+                             React.createElement(
+                               "strong",
+                               null,
+                               "Create Health Monitor"
+                             )
+                           )
+                         )
+                       )
+                     ),
               data.createMonitor && React.createElement(
                         "div",
                         {style: { borderLeft: '3px solid #ddd', paddingLeft: 15, marginLeft: 5 }},
@@ -1343,6 +1343,7 @@ const DeleteConfirmModal = ({ lb, onClose, onConfirm, loading }) => (
               "p",
               null,
               "Are you sure you want to delete",
+              ' ',
               React.createElement(
                 "strong",
                 null,
@@ -1391,6 +1392,163 @@ const DeleteConfirmModal = ({ lb, onClose, onConfirm, loading }) => (
 // Expose to global
 window.Octavia = window.Octavia || {};
 window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
+
+; (function () {
+    const FloatingIpModal = ({ lb, options, onClose, onAttach }) => {
+        const [selection, setSelection] = React.useState('');
+        const [submitting, setSubmitting] = React.useState(false);
+
+        const pools = options?.floatingIpPools || options?.optionFloatingIpPools || [];
+        const ips = options?.availableFloatingIps || [];
+
+        React.useEffect(() => {
+            // Preselect first pool if available
+            if (!selection) {
+                const first = (pools[0]?.value) || (ips[0]?.value) || '';
+                if (first) setSelection(first);
+            }
+        }, [pools, ips]);
+
+        return (
+            React.createElement(
+              "div",
+              {className: "modal fade in", style: {
+                    display: 'block',
+                    backgroundColor: 'rgba(0,0,0,0.5)'
+                }},
+              React.createElement(
+                "div",
+                {className: "modal-dialog", style: { width: 640 }},
+                React.createElement(
+                  "div",
+                  {className: "modal-content"},
+                  React.createElement(
+                    "div",
+                    {className: "modal-header"},
+                    React.createElement(
+                      "button",
+                      {type: "button", className: "close", onClick: onClose, "aria-label": "Close"},
+                      React.createElement(
+                        "span",
+                        {"aria-hidden": "true"},
+                        React.createElement(
+                          "svg",
+                          {version: "1.1", className: "close-icon", xmlns: "http://www.w3.org/2000/svg", xmlnsXlink: "http://www.w3.org/1999/xlink", x: "0px", y: "0px", viewBox: "0 0 59.9 59.9", enableBackground: "new 0 0 59.9 59.9", xmlSpace: "preserve"},
+                          React.createElement(
+                            "line",
+                            {fill: "none", stroke: "currentcolor", strokeMiterlimit: "10", x1: "57.4", y1: "2.5", x2: "2.5", y2: "57.4"}
+                          ),
+                          React.createElement(
+                            "line",
+                            {fill: "none", stroke: "currentcolor", strokeMiterlimit: "10", x1: "2.5", y1: "2.5", x2: "57.4", y2: "57.4"}
+                          )
+                        )
+                      )
+                    ),
+                    React.createElement(
+                      "h4",
+                      {className: "modal-title"},
+                      "Attach Floating IP"
+                    )
+                  ),
+                  React.createElement(
+                    "div",
+                    {className: "modal-body"},
+                    React.createElement(
+                      "div",
+                      {className: "text-center", style: { marginBottom: 15 }},
+                      "Are you sure you would like to attach this floating IP?"
+                    ),
+                    React.createElement(
+                      "div",
+                      {className: "form-horizontal form-basic"},
+                      React.createElement(
+                        "div",
+                        {className: "form-group"},
+                        React.createElement(
+                          "div",
+                          {className: "option-row"},
+                          React.createElement(
+                            "label",
+                            {className: "control-label col-sm-3"},
+                            "Floating IP"
+                          ),
+                          React.createElement(
+                            "div",
+                            {className: "col-sm-9 option-type-input-row option-type-row-wrapper"},
+                            React.createElement(
+                              "span",
+                              {className: "required-bar"}
+                            ),
+                            React.createElement(
+                              "select",
+                              {className: "form-control input-sm", value: selection, onChange: (e) => setSelection(e.target.value)},
+                              pools.length > 0 && (
+                                                    React.createElement(
+                                                      "optgroup",
+                                                      {label: "Pools"},
+                                                      pools.map(p => (
+                                                            React.createElement(
+                                                              "option",
+                                                              {key: p.value, value: p.value},
+                                                              p.name
+                                                            )
+                                                        ))
+                                                    )
+                                                ),
+                              ips.length > 0 && (
+                                                    React.createElement(
+                                                      "optgroup",
+                                                      {label: "Available IPs"},
+                                                      ips.map(ip => (
+                                                            React.createElement(
+                                                              "option",
+                                                              {key: ip.value, value: ip.value},
+                                                              ip.name
+                                                            )
+                                                        ))
+                                                    )
+                                                ),
+                              pools.length === 0 && ips.length === 0 && (
+                                                    React.createElement(
+                                                      "option",
+                                                      {value: true},
+                                                      "No floating IP pools or IPs available"
+                                                    )
+                                                )
+                            )
+                          )
+                        )
+                      )
+                    )
+                  ),
+                  React.createElement(
+                    "div",
+                    {className: "modal-footer"},
+                    React.createElement(
+                      "button",
+                      {type: "button", className: "btn btn-primary", onClick: onClose, disabled: submitting},
+                      "Cancel"
+                    ),
+                    React.createElement(
+                      "button",
+                      {type: "button", className: "btn btn-primary", onClick: () => {
+                                    setSubmitting(true);
+                                    Promise.resolve(onAttach(selection))
+                                        .finally(() => setSubmitting(false));
+                                }, disabled: !selection || submitting},
+                      submitting ? 'Loading...' : 'Execute'
+                    )
+                  )
+                )
+              )
+            )
+        )
+    }
+
+    window.Octavia.FloatingIpModal = FloatingIpModal;
+})();
+
 
 ; (function () {
 
@@ -1488,16 +1646,29 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                 .then(res => {
                     setLoading(false);
                     if (res && res.success === false) {
-                        setValidationMsg('Error: ' + (res.msg || res.error || 'Unknown error occurred'));
+                        const raw = res.msg || res.error || 'Unknown error occurred';
+                        setValidationMsg(formatCreateError(raw));
                     } else {
                         onCreated();
                     }
                 })
                 .catch(e => {
                     setLoading(false);
-                    setValidationMsg('Error: ' + (e.message || e.error || 'Network error'));
+                    const raw = e.message || e.error || 'Network error';
+                    setValidationMsg(formatCreateError(raw));
                 });
         };
+
+        function formatCreateError(raw) {
+            const isIpAddressError = typeof raw === 'string' && (
+                /IPv4 or IPv6 address/i.test(raw) ||
+                /does not appear to be.*address/i.test(raw)
+            );
+            if (isIpAddressError && (data.members || []).length > 0) {
+                return raw + ' This often happens when a pool member (same IP and port) is already in use on another load balancer. Try using a different port for that member, or remove it from the other load balancer first.';
+            }
+            return raw.startsWith('Error:') ? raw : 'Error: ' + raw;
+        }
 
         const renderStep = () => {
             switch (step) {
@@ -1653,13 +1824,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
         const [tab, setTab] = React.useState('general');
         const [data, setData] = React.useState({ ...lb });
 
-        const vipSubnetDisplay = React.useMemo(() => {
-            const vipId = data.vip_subnet_id;
-            if (!vipId) return '';
-            const sub = (options?.subnets || []).find(s => s.value === vipId);
-            if (!sub) return vipId;
-            return sub.cidr ? `${sub.name} (${sub.cidr})` : sub.name;
-        }, [options, data.vip_subnet_id]);
+        const vipSubnetDisplay = data.vip_subnet_display || lb.vip_subnet_display || data.vip_subnet_id || '';
         const [saving, setSaving] = React.useState(false);
         const [validationMsg, setValidationMsg] = React.useState('');
 
@@ -1684,6 +1849,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                     const lbInfo = details.loadbalancer;
                     if (lbInfo.vip_address) newD.vip_address = lbInfo.vip_address;
                     if (lbInfo.vip_subnet_id) newD.vip_subnet_id = lbInfo.vip_subnet_id;
+                    if (lbInfo.vip_subnet_display) newD.vip_subnet_display = lbInfo.vip_subnet_display;
                     if (typeof lbInfo.admin_state_up === 'boolean') {
                         newD.admin_state_up = lbInfo.admin_state_up;
                     }
@@ -1738,6 +1904,18 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
 
         const update = (field, val) => setData(prev => ({ ...prev, [field]: val }));
 
+        function formatUpdateError(raw) {
+            const isIpAddressError = typeof raw === 'string' && (
+                /IPv4 or IPv6 address/i.test(raw) ||
+                /does not appear to be.*address/i.test(raw)
+            );
+            const hasMembers = (data.members || []).length > 0;
+            if (isIpAddressError && hasMembers) {
+                return raw + ' This often happens when a pool member (same IP and port) is already in use on another load balancer. Try using a different port for that member, or remove it from the other load balancer first.';
+            }
+            return raw.startsWith('Error:') ? raw : 'Error: ' + raw;
+        }
+
         const save = () => {
             setValidationMsg('');
             setSaving(true);
@@ -1745,14 +1923,16 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                 .then(res => {
                     setSaving(false);
                     if (res && res.success === false) {
-                        setValidationMsg('Error: ' + (res.msg || res.error || 'Unknown update error'));
+                        const raw = res.msg || res.error || 'Unknown update error';
+                        setValidationMsg(formatUpdateError(raw));
                     } else {
                         onUpdated();
                     }
                 })
                 .catch(e => {
                     setSaving(false);
-                    setValidationMsg('Error: ' + (e.message || e.error || 'Network error'));
+                    const raw = e.message || e.error || 'Network error';
+                    setValidationMsg(formatUpdateError(raw));
                 });
         };
 
@@ -1800,7 +1980,12 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                       "h4",
                       {className: "modal-title"},
                       "Edit Load Balancer:",
-                      lb.name
+                      ' ',
+                      React.createElement(
+                        "strong",
+                        null,
+                        lb.name
+                      )
                     )
                   ),
                   React.createElement(
@@ -1949,7 +2134,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                         null,
                         React.createElement(
                           Step2_Listener,
-                          {data: data, update: update}
+                          {data: data, update: update, hideCreateToggle: true}
                         ),
                         React.createElement(
                           "div",
@@ -1979,7 +2164,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                     null,
                     React.createElement(
                       Step3_Pool,
-                      {data: data, update: update}
+                      {data: data, update: update, hideCreateToggle: true}
                     ),
                     React.createElement(
                       "div",
@@ -2022,7 +2207,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                        null,
                        React.createElement(
                          Step5_Monitor,
-                         {data: data, update: update}
+                         {data: data, update: update, hideCreateToggle: true}
                        ),
                        React.createElement(
                          "div",
@@ -2091,16 +2276,18 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
         const [deleting, setDeleting] = React.useState(false);
 
         const [reloadKey, setReloadKey] = React.useState(0);
+        const [inlineLbs, setInlineLbs] = React.useState(null);
+        const [floatingTarget, setFloatingTarget] = React.useState(null);
 
         const lbState = useAsync(() => Api.listLoadBalancers({ networkId }), [networkId, reloadKey]);
 
-        // Fetch options independently when wizard is opened
+        // Fetch options when wizard or edit is opened
         React.useEffect(() => {
             if (showWizard || showEdit) {
                 const ctx = { networkId };
 
                 Api.getSubnets(networkId).then(res => {
-                    const mapped = (res?.data || []).map(s => ({ name: s.name, value: s.value, cidr: s.cidr }));
+                    const mapped = (res?.data || []).map(s => ({ name: s.name, value: s.value, cidr: s.cidr, id: s.id, externalId: s.externalId }));
                     setSubnets(mapped);
                 }).catch(e => console.error("Error fetching subnets:", e));
 
@@ -2113,17 +2300,25 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                 }).catch(e => console.error(e));
 
                 Api.getFloatingIpPools(ctx).then(res => {
-                    setOptions(o => ({ ...o, optionFloatingIpPools: res.data || [] }));
+                    setOptions(o => ({ ...o, floatingIpPools: res.floatingIpPools || [], availableFloatingIps: res.availableFloatingIps || [] }));
                 }).catch(e => console.error(e));
             }
         }, [showWizard, showEdit, networkId]);
+
+        // Background-fetch floating IP pools once per network so the cog modal opens fast
+        React.useEffect(() => {
+            const ctx = { networkId };
+            Api.getFloatingIpPools(ctx).then(res => {
+                setOptions(o => ({ ...o, floatingIpPools: res.floatingIpPools || [], availableFloatingIps: res.availableFloatingIps || [] }));
+            }).catch(e => console.error(e));
+        }, [networkId]);
 
         if (lbState.error) return React.createElement(
                                     "div",
                                     {className: "alert alert-danger"},
                                     lbState.error.message
                                   );
-        if (lbState.loading) {
+        if (lbState.loading && !inlineLbs) {
             return (
                 React.createElement(
                   "div",
@@ -2140,7 +2335,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
             );
         }
 
-        const lbs = lbState.data.loadbalancers || [];
+        const lbs = inlineLbs || lbState.data.loadbalancers || [];
 
         const handleDelete = () => {
             setDeleting(true);
@@ -2155,6 +2350,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
         const CreateWizardComp = window.Octavia.CreateWizard;
         const EditLBModalComp = window.Octavia.EditLBModal;
         const DeleteConfirmModalComp = window.Octavia.DeleteConfirmModal;
+        const FloatingIpModalComp = window.Octavia.FloatingIpModal;
 
         return (
             React.createElement(
@@ -2167,6 +2363,25 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
               deleteTarget && React.createElement(
                   DeleteConfirmModalComp,
                   {lb: deleteTarget, loading: deleting, onClose: () => setDeleteTarget(null), onConfirm: handleDelete}
+                ),
+              floatingTarget && (
+                    React.createElement(
+                      FloatingIpModalComp,
+                      {lb: floatingTarget, options: options, onClose: () => setFloatingTarget(null), onAttach: (selection) => {
+                            return Api.attachFloatingIp(floatingTarget.id, selection, networkId)
+                                .then(() => {
+                                    setFloatingTarget(null);
+                                    // Refresh list in background without triggering global loader
+                                    return Api.listLoadBalancers({ networkId }).then(r => {
+                                        setInlineLbs(r.loadbalancers || r.data?.loadbalancers || []);
+                                        setToast({ msg: 'Floating IP attached successfully.', type: 'success' });
+                                    });
+                                })
+                                .catch(err => {
+                                    setToast({ msg: err.message || 'Failed to attach Floating IP.', type: 'danger' });
+                                });
+                        }}
+                    )
                 ),
               view === 'create' && (
                     React.createElement(
@@ -2213,6 +2428,11 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                     React.createElement(
                       "th",
                       null,
+                      "DESCRIPTION"
+                    ),
+                    React.createElement(
+                      "th",
+                      null,
                       "STATUS"
                     ),
                     React.createElement(
@@ -2247,7 +2467,12 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                               React.createElement(
                                 "td",
                                 null,
-                                lb.vip_address
+                                lb.vip_display || lb.vip_address
+                              ),
+                              React.createElement(
+                                "td",
+                                null,
+                                lb.description || ''
                               ),
                               React.createElement(
                                 "td",
@@ -2288,6 +2513,64 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                                     "span",
                                     {className: "btn-icon btn-icon-trashcan"}
                                   )
+                                ),
+                                React.createElement(
+                                  "div",
+                                  {className: "dropdown", style: { display: 'inline-block', marginLeft: 4 }},
+                                  React.createElement(
+                                    "a",
+                                    {href: "#", className: "btn btn-sm btn-link btn-link-icon", "data-toggle": "dropdown", "aria-haspopup": "true", "aria-expanded": "false", onClick: e => e.preventDefault()},
+                                    React.createElement(
+                                      "span",
+                                      {className: "glyphicon glyphicon-cog"}
+                                    ),
+                                    React.createElement(
+                                      "span",
+                                      {className: "caret"}
+                                    )
+                                  ),
+                                  React.createElement(
+                                    "ul",
+                                    {className: "dropdown-menu view-options dropdown-menu-right", role: "menu", "aria-labelledby": "dlabel", "data-key": "view-options"},
+                                    lb.vip_floating ? (
+                                                React.createElement(
+                                                  "li",
+                                                  null,
+                                                  React.createElement(
+                                                    "a",
+                                                    {href: "#", onClick: (e) => {
+                                                            e.preventDefault();
+                                                            Api.detachFloatingIp(lb.id, networkId)
+                                                                .then(() => {
+                                                                    // Refresh list in background without global loader
+                                                                    return Api.listLoadBalancers({ networkId }).then(r => {
+                                                                        setInlineLbs(r.loadbalancers || r.data?.loadbalancers || []);
+                                                                        setToast({ msg: 'Floating IP detached successfully.', type: 'success' });
+                                                                    });
+                                                                })
+                                                                .catch(err => {
+                                                                    setToast({ msg: err.message || 'Failed to detach Floating IP.', type: 'danger' });
+                                                                });
+                                                        }},
+                                                    "Detach Floating IP"
+                                                  )
+                                                )
+                                            ) : (
+                                                React.createElement(
+                                                  "li",
+                                                  null,
+                                                  React.createElement(
+                                                    "a",
+                                                    {href: "#", onClick: (e) => {
+                                                            e.preventDefault();
+                                                            // Open modal immediately; background options are already prefetched
+                                                            setFloatingTarget(lb);
+                                                        }},
+                                                    "Attach Floating IP"
+                                                  )
+                                                )
+                                            )
+                                  )
                                 )
                               )
                             )
@@ -2298,7 +2581,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                               null,
                               React.createElement(
                                 "td",
-                                {colSpan: "6", className: "text-center text-muted", style: { padding: '40px 0' }},
+                                {colSpan: "7", className: "text-center text-muted", style: { padding: '40px 0' }},
                                 "No Load Balancers found. Click \"+ ADD\" to create one."
                               )
                             )
@@ -2386,6 +2669,11 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                       React.createElement(
                         "th",
                         null,
+                        "Description"
+                      ),
+                      React.createElement(
+                        "th",
+                        null,
                         "Status"
                       ),
                       React.createElement(
@@ -2424,7 +2712,12 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                                   React.createElement(
                                     "td",
                                     null,
-                                    lb.vip_address
+                                    lb.vip_display || lb.vip_address
+                                  ),
+                                  React.createElement(
+                                    "td",
+                                    null,
+                                    lb.description || ''
                                   ),
                                   React.createElement(
                                     "td",
@@ -2481,6 +2774,7 @@ window.Octavia = window.Octavia || {};
 //= require js/components/Api.jsx
 //= require js/components/WizardSteps.jsx
 //= require js/components/DeleteConfirmModal.jsx
+//= require js/components/FloatingIpModal.jsx
 //= require js/components/CreateWizard.jsx
 //= require js/components/EditLBModal.jsx
 //= require js/components/NetworkView.jsx

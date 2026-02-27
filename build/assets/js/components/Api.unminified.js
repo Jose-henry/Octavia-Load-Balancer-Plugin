@@ -117,7 +117,7 @@ window.Octavia = window.Octavia || {};
                     return { monitor };
                 }),
 
-            attachFloatingIp: (lbId, fipPoolId, networkId) => apiFetch(`${baseUrl}/floatingipAttach`, { method: 'POST', body: JSON.stringify({ lbId, floatingIpPoolId: fipPoolId, networkId }) }),
+            attachFloatingIp: (lbId, selection, networkId) => apiFetch(`${baseUrl}/floatingipAttach`, { method: 'POST', body: JSON.stringify({ lbId, floatingIpPoolId: selection, networkId }) }),
 
             detachFloatingIp: (lbId, networkId) => apiFetch(`${baseUrl}/floatingipDetach`, { method: 'POST', body: JSON.stringify({ lbId, networkId }) }),
 

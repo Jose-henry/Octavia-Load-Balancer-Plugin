@@ -14,7 +14,7 @@ const DeleteConfirmModal = ({ lb, onClose, onConfirm, loading }) => (
                     <h4 className="modal-title">Delete Load Balancer</h4>
                 </div>
                 <div className="modal-body">
-                    <p>Are you sure you want to delete <strong>{lb.name}</strong>?</p>
+                    <p>Are you sure you want to delete{' '}<strong>{lb.name}</strong>?</p>
                     <p className="text-muted"><small>This action cannot be undone.</small></p>
                     {loading && <div className="text-center"><i className="fa fa-spinner fa-spin"></i> Deleting...</div>}
                 </div>

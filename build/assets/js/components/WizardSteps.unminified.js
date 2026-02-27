@@ -110,7 +110,7 @@
     };
 
     // --- Step 2: Listener ---
-    const Step2_Listener = ({ data, update }) => {
+    const Step2_Listener = ({ data, update, hideCreateToggle = false }) => {
         const { Field } = window.Octavia;
         const protocols = ['HTTP', 'HTTPS', 'TERMINATED_HTTPS', 'TCP', 'UDP', 'SCTP'];
         const showHeaders = ['HTTP', 'TERMINATED_HTTPS'].includes(data.listenerProtocol);
@@ -121,31 +121,31 @@
             React.createElement(
               "div",
               {className: "form-horizontal"},
-              React.createElement(
-                "div",
-                {className: "form-group"},
-                React.createElement(
-                  "div",
-                  {className: "col-sm-12"},
-                  React.createElement(
-                    "div",
-                    {className: "checkbox"},
-                    React.createElement(
-                      "label",
-                      null,
-                      React.createElement(
-                        "input",
-                        {type: "checkbox", checked: data.createListener, onChange: e => update('createListener', e.target.checked)}
-                      ),
-                      React.createElement(
-                        "strong",
-                        null,
-                        "Create Listener"
-                      )
-                    )
-                  )
-                )
-              ),
+              !hideCreateToggle && React.createElement(
+                       "div",
+                       {className: "form-group"},
+                       React.createElement(
+                         "div",
+                         {className: "col-sm-12"},
+                         React.createElement(
+                           "div",
+                           {className: "checkbox"},
+                           React.createElement(
+                             "label",
+                             null,
+                             React.createElement(
+                               "input",
+                               {type: "checkbox", checked: data.createListener, onChange: e => update('createListener', e.target.checked)}
+                             ),
+                             React.createElement(
+                               "strong",
+                               null,
+                               "Create Listener"
+                             )
+                           )
+                         )
+                       )
+                     ),
               data.createListener && React.createElement(
                          "div",
                          {style: { borderLeft: '3px solid #ddd', paddingLeft: 15, marginLeft: 5 }},
@@ -353,7 +353,7 @@
     };
 
     // --- Step 3: Pool ---
-    const Step3_Pool = ({ data, update }) => {
+    const Step3_Pool = ({ data, update, hideCreateToggle = false }) => {
         const { Field } = window.Octavia;
         const algorithms = ['ROUND_ROBIN', 'LEAST_CONNECTIONS', 'SOURCE_IP'];
         const protocols = ['HTTP', 'HTTPS', 'TCP', 'UDP', 'SCTP'];
@@ -362,31 +362,31 @@
             React.createElement(
               "div",
               {className: "form-horizontal"},
-              React.createElement(
-                "div",
-                {className: "form-group"},
-                React.createElement(
-                  "div",
-                  {className: "col-sm-12"},
-                  React.createElement(
-                    "div",
-                    {className: "checkbox"},
-                    React.createElement(
-                      "label",
-                      null,
-                      React.createElement(
-                        "input",
-                        {type: "checkbox", checked: data.createPool, onChange: e => update('createPool', e.target.checked)}
-                      ),
-                      React.createElement(
-                        "strong",
-                        null,
-                        "Create Pool"
-                      )
-                    )
-                  )
-                )
-              ),
+              !hideCreateToggle && React.createElement(
+                       "div",
+                       {className: "form-group"},
+                       React.createElement(
+                         "div",
+                         {className: "col-sm-12"},
+                         React.createElement(
+                           "div",
+                           {className: "checkbox"},
+                           React.createElement(
+                             "label",
+                             null,
+                             React.createElement(
+                               "input",
+                               {type: "checkbox", checked: data.createPool, onChange: e => update('createPool', e.target.checked)}
+                             ),
+                             React.createElement(
+                               "strong",
+                               null,
+                               "Create Pool"
+                             )
+                           )
+                         )
+                       )
+                     ),
               data.createPool && React.createElement(
                      "div",
                      {style: { borderLeft: '3px solid #ddd', paddingLeft: 15, marginLeft: 5 }},
@@ -853,38 +853,38 @@
     };
 
     // --- Step 5: Monitor ---
-    const Step5_Monitor = ({ data, update }) => {
+    const Step5_Monitor = ({ data, update, hideCreateToggle = false }) => {
         const { Field } = window.Octavia;
         const types = ['HTTP', 'HTTPS', 'PING', 'TCP', 'TLS-HELLO', 'UDP-CONNECT', 'SCTP'];
         return (
             React.createElement(
               "div",
               {className: "form-horizontal"},
-              React.createElement(
-                "div",
-                {className: "form-group"},
-                React.createElement(
-                  "div",
-                  {className: "col-sm-12"},
-                  React.createElement(
-                    "div",
-                    {className: "checkbox"},
-                    React.createElement(
-                      "label",
-                      null,
-                      React.createElement(
-                        "input",
-                        {type: "checkbox", checked: data.createMonitor, onChange: e => update('createMonitor', e.target.checked)}
-                      ),
-                      React.createElement(
-                        "strong",
-                        null,
-                        "Create Health Monitor"
-                      )
-                    )
-                  )
-                )
-              ),
+              !hideCreateToggle && React.createElement(
+                       "div",
+                       {className: "form-group"},
+                       React.createElement(
+                         "div",
+                         {className: "col-sm-12"},
+                         React.createElement(
+                           "div",
+                           {className: "checkbox"},
+                           React.createElement(
+                             "label",
+                             null,
+                             React.createElement(
+                               "input",
+                               {type: "checkbox", checked: data.createMonitor, onChange: e => update('createMonitor', e.target.checked)}
+                             ),
+                             React.createElement(
+                               "strong",
+                               null,
+                               "Create Health Monitor"
+                             )
+                           )
+                         )
+                       )
+                     ),
               data.createMonitor && React.createElement(
                         "div",
                         {style: { borderLeft: '3px solid #ddd', paddingLeft: 15, marginLeft: 5 }},

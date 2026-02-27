@@ -58,6 +58,17 @@
     color: #616161;
 }
 
+/* Icon link buttons – black by default, theme-blue on hover */
+.btn-link.btn-link-icon {
+    color: #333;
+    text-decoration: none;
+}
+.btn-link.btn-link-icon:hover,
+.btn-link.btn-link-icon:focus {
+    color: #2d6ca2;
+    text-decoration: none;
+}
+
 /* Action button styles */
 .octavia-action-btn {
     display: inline-flex;
