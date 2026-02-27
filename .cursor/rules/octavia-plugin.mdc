@@ -1,0 +1,18 @@
+---
+description: Octavia Load Balancer plugin – context and critical rules
+alwaysApply: true
+---
+
+# Octavia Load Balancer Plugin
+
+Full details: **docs/AGENT-KNOWLEDGE.md** (bugs, fixes, API conventions, file reference).
+
+## Critical rules
+
+- **Edit modal VIP subnet:** Show human-readable "SubnetName (CIDR)" from backend only. Backend resolves via Neutron `GET /v2.0/subnets/{id}` in **loadbalancerDetails**; do not add Neutron lookups in the list endpoint.
+- **Create flow:** Do not change create wizard or create API; subnet dropdown stays Morpheus (optionSubnets). VIP address optional; never send null or "None" to Octavia.
+- **Floating IP on delete:** Before Octavia cascade delete, disassociate any FIP on the LB’s VIP port (Neutron `PUT floatingips/{id}` with `port_id: null`).
+- **Member IP+port conflict:** Same IP:port cannot be used on two LBs. When API returns "IPv4 or IPv6 address" error and form has members, show hint: try a different port or remove from other LB. Apply in both Create wizard and Edit modal.
+- **List vs details:** Keep list endpoint fast (no extra Neutron/Octavia calls per LB). Subnet display only in details.
+- **Build:** If clean fails (locked build dir), run `.\gradlew.bat --stop` then delete `build`.
+- **Controller:** Use `def` for Cloud in private methods; avoid `Cloud` type if it causes compile errors.
