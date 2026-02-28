@@ -220,11 +220,86 @@ No extra plugin UI is required for these flows—Morpheus provides them once the
 
 ---
 
-## 8. References
+## 8. Feature map recap (what the framework supports vs Octavia)
+
+When you implement a **LoadBalancerProvider**, Octavia LBs appear under **Infrastructure > Load Balancers**. Mapping of framework features to Octavia:
+
+| Area | Morpheus feature | Octavia support |
+|------|------------------|-----------------|
+| **Core** | addLoadBalancer / deleteLoadBalancer | Yes – we already create/delete in Octavia |
+| | initializeLoadBalancer | Yes – auth test + initial sync |
+| | refresh() | Yes – re-fetch from Octavia API |
+| **Virtual servers** | create/delete Virtual Server | Yes – Octavia Listeners (VIP + port + protocol) |
+| **Pools** | create/delete Pool, balancing | Yes – ROUND_ROBIN, LEAST_CONNECTIONS, SOURCE_IP |
+| **Nodes** | create/delete Node | Yes – Octavia pool members (IP + port) |
+| **Monitors** | create/delete Health Monitor | Yes – HTTP, HTTPS, TCP, PING, TLS-HELLO |
+| **Profiles** | SSL/TLS profiles | Partial – TERMINATED_HTTPS + Barbican if available |
+| **Policies / rules** | L7 policies and rules | Yes – Octavia L7 policies/rules (URL path, headers) |
+| **VIP / FIP** | supportsVip, supportsFloatingIp | Yes – we already handle FIP attach/detach |
+| **Sticky** | supportsSticky | Yes – SOURCE_IP, APP_COOKIE, HTTP_COOKIE |
+| **Pricing** | createPricePlans, LB + Virtual Server price types | Yes – enable when ready |
+
+**What we do *not* copy from F5:** iRules/scripts, partitions, F5-specific profile types.
+
+---
+
+## 9. Design choices to confirm (before implementation)
+
+These four decisions drive **getOptionTypes()**, **addLoadBalancer** behavior, and what to implement in the first version.
+
+### 9.1 Add LB in Morpheus
+
+When a user adds an “Octavia” load balancer under **Infrastructure > Load Balancers**, should that:
+
+- **A. Sync only** – Only discover existing Octavia LBs (refresh pulls them in; “Add” in Morpheus does not create a new LB in OpenStack), or  
+- **B. Create in Octavia** – “Add” in Morpheus can also create a new LB in Octavia (so the integration record is tied to a real Octavia LB).
+
+*Decision: ________*
+
+### 9.2 Scope of integration
+
+Is the integration tied to:
+
+- **A. Single cloud (and optionally tenant/project)** – One “Octavia” integration = one cloud (and one tenant/project or a fixed mapping), or  
+- **B. Multi-tenant / multi-cloud** – One integration lists or manages LBs across multiple clouds/tenants (affects getOptionTypes and how we resolve cloud/tenant for API calls).
+
+*Decision: ________*
+
+### 9.3 Pricing
+
+Do we need **createPricePlans** and the Load Balancer / Load Balancer Virtual Server price types in the **first version**, or is that a **later phase**?
+
+*Decision: ________*
+
+### 9.4 L7 policies and rules
+
+Should we implement **createLoadBalancerPolicy** / **createLoadBalancerRule** (and delete) in the **first version**, or leave L7 policies/rules for a **later iteration**?
+
+*Decision: ________*
+
+---
+
+## 10. Implementation plan (after decisions)
+
+Once the four decisions above are set:
+
+1. **Provider skeleton** – Add `OctaviaLoadBalancerProvider`, implement `getCode()`, `getName()`, `getDescription()`, `getIcon()`, `getLoadBalancerTypes()`, `getOptionTypes()` (based on scope and add-LB decision).
+2. **Registration** – Register the provider in `CustomOctaviaLoadBalancerUiPlugin.initialize()` via `pluginProviders.put(provider.code, provider)`.
+3. **Lifecycle** – Implement `validate()`, `initializeLoadBalancer()`, `refresh()` (reuse/extend `OctaviaLoadBalancerSync` + listener/pool/member/monitor sync), and `addLoadBalancer()` / `deleteLoadBalancer()` per decision 9.1.
+4. **CRUD** – Implement create/delete for virtual servers (listeners), pools, nodes, health monitors; optionally policies/rules per decision 9.4.
+5. **Instance attachment** – Implement `addInstance()` / `removeInstance()` so provisioning and instance-detail LB section work.
+6. **Pricing** – If decision 9.3 is “yes”, set `createPricePlans: true` on the type and ensure price types are available in Plans & Pricing.
+
+See **docs/BIGIP-REFERENCE-REVIEW.md** for BigIP patterns and method-by-method mapping.
+
+---
+
+## 11. References
 
 - **Morpheus Plugin API**: [developer.morpheusdata.com](https://developer.morpheusdata.com) – LoadBalancerProvider, NetworkLoadBalancerType, MorpheusLoadBalancerService, Plugin permissions.
 - **Docs**: Load Balancers (Infrastructure), Tenancy, Groups and Roles, Plans & Pricing, Configuring Multi-Tenancy.
 - **F5 integration**: Docs describe F5 as an external LB type (API host, port, credentials, virtual servers, pools, nodes, monitors). Use as a behavioral reference; implement Octavia API, not F5 API.
+- **BigIP reference**: `example plugin/morpheus-bigip-loadbalancer-plugin` and **docs/BIGIP-REFERENCE-REVIEW.md**.
 
 ---
 
