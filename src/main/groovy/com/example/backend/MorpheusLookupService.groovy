@@ -261,61 +261,124 @@ class MorpheusLookupService {
         }
     }
     /**
-     * Context info from an Instance (Cloud + Project).
+     * Context info from an Instance (Cloud + Project + Network).
+     * Uses Morpheus Plugin API patterns (Context7/docs):
+     * - Instance has provisionZoneId (cloud id), resourcePool (CloudPool), account (Account).
+     * - DataQuery withJoin() to load relations (e.g. containers.server.cloud).
+     * - ComputeServer has getCloud() for cloud association.
      */
     Map getInstanceContext(Long instanceId) {
         try {
-            Instance inst = morpheus.async.instance.find(new DataQuery().withFilter("id", instanceId))?.blockingGet()
+            // Load instance with joins so relations are populated (DataQuery withJoin per Plugin API docs)
+            def query = new DataQuery().withFilter("id", instanceId)
+                .withJoin("containers")
+                .withJoin("containers.server")
+                .withJoin("resourcePool")
+                .withJoin("account")
+            def inst = morpheus.async.instance.find(query)?.blockingGet()
+            if (!inst) {
+                inst = morpheus.async.instance.get(instanceId)?.blockingGet()
+            }
             if (!inst) return [:]
 
-            // Resolve Cloud (Site/Zone)
-            def cloud = inst.site
-             // If site is not the cloud (e.g. it's a group), try to find cloud via other means
-             // In Morpheus model, Instance.site usually refers to the Group (ComputeSite).
-             // The Cloud is available via .cloud (if property exists) or we have to query.
-             // Accessing dynamic property might be risky in compiled Groovy.
-             // Safe way: morpheus.cloud.getCloudById(inst.cloud.id) if inst.cloud exists.
-            
-             // But let's try to get cloud from network?
-             // An instance has interfaces.
-             // We can pick the first interface's network -> cloud.
-            
-            if (!cloud && inst.plan?.provisionType?.code == 'openstack') {
-                 // Try to find cloud via network
-                 // This is safer to ensure we get the right OpenStack cloud
+            def cloud = null
+            def project = null
+            def pool = null
+            def network = null
+
+            // 1) Instance-level fields (Plugin API: Instance has provisionZoneId, resourcePool, account)
+            try {
+                if (inst.hasProperty('provisionZoneId') && inst.provisionZoneId != null) {
+                    cloud = morpheus.async.cloud.getCloudById(inst.provisionZoneId)?.blockingGet()
+                    if (cloud) log.debug("getInstanceContext: cloud from instance.provisionZoneId {}", inst.provisionZoneId)
+                }
+            } catch (e) { log.debug("getInstanceContext: provisionZoneId: {}", e.message) }
+            try {
+                if (inst.hasProperty('resourcePool') && inst.resourcePool != null) {
+                    pool = inst.resourcePool
+                    if (!project && inst.hasProperty('account') && inst.account != null) project = inst.account
+                }
+            } catch (e) { log.debug("getInstanceContext: resourcePool/account: {}", e.message) }
+            if (inst.hasProperty('account') && inst.account != null) {
+                project = project ?: inst.account
             }
 
-            // Using pure Morpheus Object Model (properties might differ by version)
-            // Let's try dynamic access via property
-             def instCloud = inst.hasProperty('cloud') ? inst.cloud : null
-             
-             // Fallback: Resolve from Group if single cloud?
-             // Best bet: Interfaces.
-             
-             // Let's query instance clouds via service?
-             // morpheus.async.instance.getInstanceClouds(inst)
-             
-             // Let's stick to what we know works: OpenStack Instances usually have a Cloud ref.
-             if (!instCloud) {
-                 // Try to get from first interface
-                 // We need to fetch Interfaces?
-                 // Let's return basic info and let Controller handle if missing
-             }
-             
-             // Resolve Network from Instance Interfaces (Primary)
-             def network = null
-             // Accessing interfaces via property or method?
-             // inst.getNetInterfaces() or inst.interfaces?
-             // Safest is to try property access
-             try {
-                def ifaces = inst.netInterfaces
-                if (ifaces && ifaces.size() > 0) {
-                    network = ifaces[0].network
+            // 2) Network from Instance interfaces (withJoin can populate netInterfaces in some versions)
+            if (!network) {
+                try {
+                    def ifaces = inst.netInterfaces
+                    if (ifaces && !ifaces.isEmpty() && ifaces[0].network) {
+                        network = ifaces[0].network
+                    }
+                } catch (e) { log.debug("getInstanceContext: netInterfaces: {}", e.message) }
+            }
+            if (network && !cloud) {
+                if (network.getRefType() == 'ComputeZone' && network.getRefId()) {
+                    cloud = morpheus.async.cloud.getCloudById(network.getRefId())?.blockingGet()
                 }
-             } catch (e) { log.debug("Could not resolve network from instance: ${e}") }
+                if (!project) project = network.getOwner()
+                if (!pool) pool = network.getCloudPool()
+                log.info("getInstanceContext: instance {} -> network '{}' (id {}), cloud: {}",
+                    instanceId, network?.getName(), network?.getId(), cloud?.getName())
+            }
 
-            // Explicit project property doesn't exist on Instance
-            return [instance: inst, cloud: instCloud, project: null, network: network]
+            // 3) ComputeServer.getCloud() from first container (Plugin API: ComputeServer has getCloud())
+            if (!cloud && inst.containers && !inst.containers.isEmpty()) {
+                for (def container : inst.containers) {
+                    def server = container?.server
+                    if (!server) continue
+                    try {
+                        if (server.respondsTo('getCloud')) {
+                            def c = server.getCloud()
+                            if (c != null) { cloud = c; break }
+                        }
+                        if (server.hasProperty('cloud') && server.cloud != null) {
+                            cloud = server.cloud
+                            break
+                        }
+                    } catch (e) { log.debug("getInstanceContext: server getCloud: {}", e.message) }
+                }
+                if (cloud) {
+                    log.info("getInstanceContext: instance {} -> cloud '{}' (id {}) from container server",
+                        instanceId, cloud?.getName(), cloud?.getId())
+                    if (!pool) {
+                        try {
+                            def server = inst.containers[0]?.server
+                            if (server?.hasProperty('assignedZonePools') && server.assignedZonePools && !server.assignedZonePools.isEmpty()) {
+                                pool = server.assignedZonePools[0]
+                            }
+                            if (!pool && server?.hasProperty('cloudPool') && server.cloudPool != null) pool = server.cloudPool
+                        } catch (e) { log.debug("getInstanceContext: server pool: {}", e.message) }
+                    }
+                    if (!project && inst.hasProperty('account') && inst.account != null) project = inst.account
+                }
+            }
+
+            // 4) Fallbacks: instance.cloud, instance.site (ComputeSite)
+            if (!cloud) {
+                if (inst.hasProperty('cloud') && inst.cloud) cloud = inst.cloud
+                if (!cloud && inst.site != null) {
+                    try {
+                        if (inst.site.hasProperty('id')) {
+                            cloud = morpheus.async.cloud.getCloudById(inst.site.id)?.blockingGet()
+                        }
+                    } catch (e) { log.debug("getInstanceContext: site: {}", e.message) }
+                }
+                if (!cloud) {
+                    log.warn("getInstanceContext: no cloud for instance {} (provisionZoneId: {}, network: {}, containers: {})",
+                        instanceId, inst.hasProperty('provisionZoneId') ? inst.provisionZoneId : null,
+                        network?.name, inst.containers?.size())
+                }
+            }
+
+            // Normalize cloud: always use getCloudById so the Cloud is fully loaded (config + credentials).
+            // server.getCloud() / instance refs may return a shallow object without account credential data.
+            if (cloud?.id != null) {
+                def loadedCloud = morpheus.async.cloud.getCloudById(cloud.id)?.blockingGet()
+                if (loadedCloud) cloud = loadedCloud
+            }
+
+            return [instance: inst, cloud: cloud, project: project, pool: pool, network: network]
         } catch (Exception ex) {
             log.warn("getInstanceContext failed for instanceId={}: {}", instanceId, ex.message)
             return [:]

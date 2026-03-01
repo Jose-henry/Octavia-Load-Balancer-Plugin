@@ -206,20 +206,46 @@ class OctaviaLoadBalancerService {
             if (lbUpdates) {
                  ServiceResponse resp = client.put("/v2.0/lbaas/loadbalancers/${lbId}", [loadbalancer: lbUpdates])
                  if (!resp.success) {
-                     success = false
-                     errors << "LB Update: ${resp.msg ?: resp.error}"
+                     String lbErr = extractOctaviaError(resp, "LB Update")
+                     // Octavia often returns 409: "Load Balancer is immutable and cannot be updated" — skip so we can still update listener/pool
+                     if (lbErr != null && !lbErr.toLowerCase().contains("immutable")) {
+                         success = false
+                         errors << lbErr
+                     }
                  }
             }
             
-            // 2. Update Nested (Listener/Pool/Health Monitor) - Fetch current state first
-            // Note: This logic assumes single listener/pool for now as per UI
-            if (payload.listenerName || payload.poolName || payload.connectionLimit || payload.listenerAdminStateUp != null || payload.poolAdminStateUp != null || payload.monitorAdminStateUp != null) {
+            // 2. Update Nested (Listener/Pool/Health Monitor) - only when user actually edited those sections
+            // (avoids touching listener/pool when user only changed LB name/description)
+            List updatedSections = payload.updatedSections instanceof List ? payload.updatedSections : null
+            boolean nestedRequested = (updatedSections != null && (updatedSections.contains('listener') || updatedSections.contains('pool') || updatedSections.contains('monitor')))
+            boolean hasNestedFields = (payload.listenerName || payload.poolName || payload.poolDesc != null || payload.connectionLimit != null ||
+                payload.listenerAdminStateUp != null || payload.allowedCidrs != null || payload.poolAdminStateUp != null ||
+                payload.monitorAdminStateUp != null || payload.monitorName != null || payload.delay != null || payload.timeout != null || payload.maxRetries != null)
+            boolean doNested = hasNestedFields && (updatedSections == null || nestedRequested)
+            if (doNested) {
                  ServiceResponse getResp = get(cloud, projectId, lbId)
                  if (getResp.success) {
                       def lb = getResp.data
-                      
-                      // Update Listener
-                      if (payload.listenerName || payload.connectionLimit != null || payload.listenerAdminStateUp != null) {
+                      // Resolve listener/pool IDs (each has its own CRUD API: listeners, pools, healthmonitors)
+                      // GET /loadbalancers/{id} may not include listeners/pools; fetch them if missing (per Octavia API)
+                      if (!lb.listeners || lb.listeners.isEmpty()) {
+                          def listResp = client.get("/v2/lbaas/listeners?loadbalancer_id=${lbId}")
+                          if (listResp.success && listResp.data?.listeners != null) lb.listeners = listResp.data.listeners
+                      }
+                      if (!lb.pools || lb.pools.isEmpty()) {
+                          def poolListResp = client.get("/v2/lbaas/pools?loadbalancer_id=${lbId}")
+                          if (poolListResp.success && poolListResp.data?.pools != null) lb.pools = poolListResp.data.pools
+                      }
+                      // Pools from list may not have healthmonitor_id; fetch pool details if needed for monitor update
+                      if (lb.pools && payload.monitorAdminStateUp != null && !lb.pools[0]?.healthmonitor_id) {
+                          def poolDetailResp = client.get("/v2/lbaas/pools/${lb.pools[0].id}")
+                          if (poolDetailResp.success && poolDetailResp.data?.pool?.healthmonitor_id)
+                              lb.pools[0].healthmonitor_id = poolDetailResp.data.pool.healthmonitor_id
+                      }
+
+                      // Update Listener — PUT /v2/lbaas/listeners/{id} (per Octavia API)
+                      if (payload.listenerName || payload.connectionLimit != null || payload.listenerAdminStateUp != null || payload.allowedCidrs != null) {
                           def listeners = lb.listeners
                           if (listeners) {
                               String lisId = listeners[0].id
@@ -227,41 +253,51 @@ class OctaviaLoadBalancerService {
                               if (payload.listenerName) lisUpdates.name = payload.listenerName
                               if (payload.connectionLimit != null) lisUpdates.connection_limit = payload.connectionLimit
                               if (payload.listenerAdminStateUp != null) lisUpdates.admin_state_up = payload.listenerAdminStateUp
+                              if (payload.allowedCidrs != null && payload.allowedCidrs.toString().trim()) {
+                                  lisUpdates.allowed_cidrs = payload.allowedCidrs.toString().split(',').collect { it.trim() }.findAll { it }
+                              }
                               
                               if (lisUpdates) {
-                                  ServiceResponse lResp = client.put("/v2.0/lbaas/listeners/${lisId}", [listener: lisUpdates])
+                                  ServiceResponse lResp = client.put("/v2/lbaas/listeners/${lisId}", [listener: lisUpdates])
                                   if (!lResp.success) {
                                       success = false
-                                      errors << "Listener Update: ${lResp.msg ?: lResp.error}"
+                                      errors << extractOctaviaError(lResp, "Listener Update")
                                   }
                               }
                           }
                       }
                       
-                      // Update Pool
-                      if (payload.poolName || payload.poolAdminStateUp != null || payload.monitorAdminStateUp != null) {
+                      // Update Pool — PUT /v2/lbaas/pools/{id} (per Octavia API)
+                      if (payload.poolName || payload.poolDesc != null || payload.poolAdminStateUp != null || payload.monitorAdminStateUp != null) {
                           def pools = lb.pools
                           if (pools) {
                               String poolId = pools[0].id
                               Map poolUpdates = [:]
                               if (payload.poolName) poolUpdates.name = payload.poolName
+                              if (payload.poolDesc != null) poolUpdates.description = payload.poolDesc
                               if (payload.poolAdminStateUp != null) poolUpdates.admin_state_up = payload.poolAdminStateUp
 
                               if (poolUpdates) {
-                                  ServiceResponse pResp = client.put("/v2.0/lbaas/pools/${poolId}", [pool: poolUpdates])
+                                  ServiceResponse pResp = client.put("/v2/lbaas/pools/${poolId}", [pool: poolUpdates])
                                   if (!pResp.success) {
                                       success = false
-                                      errors << "Pool Update: ${pResp.msg ?: pResp.error}"
+                                      errors << extractOctaviaError(pResp, "Pool Update")
                                   }
                               }
 
-                              // Update Health Monitor admin_state_up if requested
-                              if (payload.monitorAdminStateUp != null && pools[0].healthmonitor_id) {
+                              // Update Health Monitor — PUT /v2/lbaas/healthmonitors/{id} (per Octavia API)
+                              if (pools[0].healthmonitor_id && (payload.monitorAdminStateUp != null || payload.monitorName != null || payload.delay != null || payload.timeout != null || payload.maxRetries != null)) {
                                   String hmId = pools[0].healthmonitor_id
-                                  ServiceResponse hmResp = client.put("/v2.0/lbaas/healthmonitors/${hmId}", [healthmonitor: [admin_state_up: payload.monitorAdminStateUp]])
+                                  Map hmUpdates = [:]
+                                  if (payload.monitorAdminStateUp != null) hmUpdates.admin_state_up = payload.monitorAdminStateUp
+                                  if (payload.monitorName != null) hmUpdates.name = payload.monitorName
+                                  if (payload.delay != null) hmUpdates.delay = payload.delay
+                                  if (payload.timeout != null) hmUpdates.timeout = payload.timeout
+                                  if (payload.maxRetries != null) hmUpdates.max_retries = payload.maxRetries
+                                  ServiceResponse hmResp = client.put("/v2/lbaas/healthmonitors/${hmId}", [healthmonitor: hmUpdates])
                                   if (!hmResp.success) {
                                       success = false
-                                      errors << "Health Monitor Update: ${hmResp.msg ?: hmResp.error}"
+                                      errors << extractOctaviaError(hmResp, "Health Monitor Update")
                                   }
                               }
                           }
@@ -272,7 +308,11 @@ class OctaviaLoadBalancerService {
             if (success) {
                 return ServiceResponse.success()
             } else {
-                String fullError = "Update failed: ${errors.join(' | ')}"
+                // When Octavia returns "immutable" for listener/pool, the LB is not ACTIVE (e.g. ERROR or PENDING_UPDATE) — give one clear message
+                boolean allImmutable = errors.every { it?.toLowerCase()?.contains('immutable') }
+                String fullError = allImmutable
+                    ? "Updates to listener, pool, or health monitor are not allowed while the load balancer is not ACTIVE (e.g. ERROR or PENDING_UPDATE). Check the load balancer status in OpenStack and try again when it is ACTIVE."
+                    : "Update failed: ${errors.join(' | ')}"
                 log.error(fullError)
                 return ServiceResponse.error(fullError)
             }
@@ -312,14 +352,19 @@ class OctaviaLoadBalancerService {
     private String extractOctaviaError(ServiceResponse response, String defaultPrefix) {
         String baseMsg = response.msg ?: response.error ?: response.content ?: "Unknown API Error"
         try {
+            Map json = null
             if (response.content) {
-                def json = new groovy.json.JsonSlurper().parseText(response.content)
-                if (json instanceof Map) {
-                    if (json.faultstring) return "${defaultPrefix}: ${json.faultstring}"
-                    if (json.NeutronError?.message) return "${defaultPrefix}: ${json.NeutronError.message}"
-                    if (json.message) return "${defaultPrefix}: ${json.message}"
-                    if (json.error) return "${defaultPrefix}: ${json.error}"
-                }
+                def parsed = new groovy.json.JsonSlurper().parseText(response.content)
+                if (parsed instanceof Map) json = parsed
+            }
+            if (json == null && response.data instanceof Map) {
+                json = response.data as Map
+            }
+            if (json) {
+                if (json.faultstring) return "${defaultPrefix}: ${json.faultstring}"
+                if (json.NeutronError?.message) return "${defaultPrefix}: ${json.NeutronError.message}"
+                if (json.message) return "${defaultPrefix}: ${json.message}"
+                if (json.error) return "${defaultPrefix}: ${json.error}"
             }
         } catch (Exception ignore) {
             // Not JSON

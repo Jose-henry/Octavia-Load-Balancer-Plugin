@@ -290,6 +290,20 @@ class OctaviaController implements PluginController {
         return ctx
     }
 
+    /**
+     * True if the current user's account is the owner of the context network (Morpheus tenant).
+     * Used to scope load balancer list and mutations so sub-tenants with shared network access cannot see or manage the owner's LBs.
+     */
+    private boolean isCurrentUserNetworkOwner(ViewModel<Map> model, Map ctx) {
+        def network = ctx?.network
+        if (!network) return false
+        def ownerId = network.getOwner()?.getId()
+        if (ownerId == null) return false
+        def accountId = model?.user?.account?.id
+        if (accountId == null) return false
+        return ownerId == accountId
+    }
+
     // ── Load Balancer Handlers ──────────────────────────────────
 
     def loadbalancers(ViewModel<Map> model) {
@@ -312,6 +326,12 @@ class OctaviaController implements PluginController {
             
             if (!cloud) {
                 log.warn("No cloud context found, returning empty list")
+                return JsonResponse.of([loadbalancers: []])
+            }
+
+            // Scope by Morpheus tenant: only show load balancers when the current user's account is the network owner.
+            if (ctx.network && !isCurrentUserNetworkOwner(model, ctx)) {
+                log.info("loadbalancers: tenant scope — current account is not network owner; returning empty list")
                 return JsonResponse.of([loadbalancers: []])
             }
 
@@ -354,9 +374,48 @@ class OctaviaController implements PluginController {
                 }
             }
 
-            // For each LB, attempt to pull pool/member information in order to calculate a membersCount.
-            def mappedLbs = apiList.collect { lb ->
+            // Filter LBs by Network if running inside a Network Tab context
+            if (ctx.networkId && ctx.network) {
+                def validSubnetIds = []
+                if (ctx.subnets) {
+                    validSubnetIds = ctx.subnets.collect { it.getExternalId() ?: it.getId()?.toString() }.findAll { it != null }
+                } else {
+                    def netExt = ctx.network.getExternalId()
+                    if (netExt) validSubnetIds << netExt
+                }
+
+                if (validSubnetIds) {
+                    log.info("Filtering LBs for Network {} by explicit subnet IDs: {}", ctx.networkId, validSubnetIds)
+                    apiList = apiList.findAll { lb -> validSubnetIds.contains(lb.vip_subnet_id) }
+                } else {
+                    log.warn("Network {} has no externalId/subnetIds to filter LBs against", ctx.networkId)
+                }
+            }
+
+            // Extract instance IPs for Instance Tab filtering
+            def instanceIps = []
+            if (ctx.instanceId && ctx.instance) {
+                try {
+                    if (ctx.instance.containers) {
+                        ctx.instance.containers.each { container ->
+                            if (container.server?.internalIp) instanceIps << container.server.internalIp
+                            if (container.server?.externalIp) instanceIps << container.server.externalIp
+                            if (container.internalIp) instanceIps << container.internalIp
+                            if (container.externalIp) instanceIps << container.externalIp
+                        }
+                    }
+                } catch(e) { log.debug("Error getting instance IPs: {}", e.message) }
+                instanceIps = instanceIps.findAll { it != null && it != '0.0.0.0' }.unique()
+                log.info("Instance IPs for filtering: {}", instanceIps)
+            }
+
+            // Initialize cache for resolving external network IDs to internal Morpheus Network objects (mostly for Instance tab)
+            def networkCache = [:]
+
+            def mappedLbs = []
+            apiList.each { lb ->
                 int memberCount = 0
+                boolean isInstanceMember = false
                 try {
                     def poolsResp = poolService.listPools(cloud, tenantName, lb.id)
                     if (poolsResp.success) {
@@ -368,6 +427,13 @@ class OctaviaController implements PluginController {
                                 if (memResp.success) {
                                     def members = memResp.data ?: []
                                     memberCount += members.size()
+                                    if (ctx.instanceId && instanceIps) {
+                                        members.each { m ->
+                                            if (instanceIps.contains(m.address)) {
+                                                isInstanceMember = true
+                                            }
+                                        }
+                                    }
                                 } else {
                                     log.warn("Failed to list members for pool {} of LB {}: {}", poolId, lb.id, memResp.msg ?: memResp.error)
                                 }
@@ -380,6 +446,11 @@ class OctaviaController implements PluginController {
                     log.warn("Error while computing memberCount for LB {}: {}", lb.id, memberEx.message)
                 }
 
+                if (ctx.instanceId && !isInstanceMember) {
+                    log.info("Skipping LB {} because instance is not a member", lb.name)
+                    return // skips current iteration in .each closure
+                }
+
                 log.info("Mapped LB {} ({}) with provisioning_status={}, operating_status={}, memberCount={}",
                         lb.name, lb.id, lb.provisioning_status, lb.operating_status, memberCount)
 
@@ -387,11 +458,36 @@ class OctaviaController implements PluginController {
                 def externalVip = vipPortId ? floatingIpByPortId[vipPortId] : null
                 def vipDisplay = externalVip ? "${lb.vip_address}/${externalVip}" : lb.vip_address
 
-                [
+                def mappedNetworkId = ctx.networkId
+                def mappedNetworkName = ctx.network?.name
+
+                if (!mappedNetworkId && lb.vip_network_id) {
+                    if (!networkCache.containsKey(lb.vip_network_id)) {
+                        try {
+                            def query = new com.morpheusdata.core.data.DataQuery().withFilter("externalId", lb.vip_network_id)
+                            def netInstance = morpheusContext.async.network.list(query).firstElement().blockingGet()
+                            if (netInstance) {
+                                networkCache[lb.vip_network_id] = [id: netInstance.id, name: netInstance.name]
+                            } else {
+                                networkCache[lb.vip_network_id] = null
+                            }
+                        } catch (Exception cacheEx) {
+                            networkCache[lb.vip_network_id] = null
+                        }
+                    }
+                    def cachedNet = networkCache[lb.vip_network_id]
+                    if (cachedNet) {
+                        mappedNetworkId = cachedNet.id
+                        mappedNetworkName = cachedNet.name
+                    }
+                }
+
+                mappedLbs << [
                     id                 : lb.id,
                     name               : lb.name,
                     vip_address        : lb.vip_address,
                     vip_subnet_id      : lb.vip_subnet_id,
+                    vip_network_id     : lb.vip_network_id,
                     vip_floating       : externalVip,
                     vip_display        : vipDisplay,
                     provisioning_status: lb.provisioning_status,
@@ -399,8 +495,8 @@ class OctaviaController implements PluginController {
                     description        : lb.description,
                     provider           : lb.provider ?: "octavia",
                     membersCount       : memberCount,
-                    networkId          : ctx.networkId,
-                    networkName        : ctx.network?.name
+                    networkId          : mappedNetworkId,
+                    networkName        : mappedNetworkName ?: 'View Network'
                 ]
             }
 
@@ -467,6 +563,9 @@ class OctaviaController implements PluginController {
             if (!cloud) {
                 return JsonResponse.of([success: false, error: 'Cloud context not found'])
             }
+            if (ctx.network && !isCurrentUserNetworkOwner(model, ctx)) {
+                return JsonResponse.of([success: false, error: 'Access denied: only the network owner can create load balancers'])
+            }
 
             log.info("Creating LB Payload:\n{}", groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(payload)))
 
@@ -512,6 +611,9 @@ class OctaviaController implements PluginController {
             
             if (!cloud || !lbId) {
                 return JsonResponse.of([success: false, error: 'Missing cloud context or LB id'])
+            }
+            if (ctx.network && !isCurrentUserNetworkOwner(model, ctx)) {
+                return JsonResponse.of([success: false, error: 'Access denied: only the network owner can delete load balancers'])
             }
 
             // Detach any floating IP before deleting, so it doesn't become orphaned in Neutron
@@ -579,6 +681,9 @@ class OctaviaController implements PluginController {
             
             if (!cloud || !lbId) {
                 return JsonResponse.of([success: false, error: 'Missing cloud context or LB id'])
+            }
+            if (ctx.network && !isCurrentUserNetworkOwner(model, ctx)) {
+                return JsonResponse.of([success: false, error: 'Access denied: only the network owner can view load balancer details'])
             }
 
             log.info("loadbalancerDetails() fetching LB {} details from Octavia", lbId)
@@ -677,6 +782,9 @@ class OctaviaController implements PluginController {
             if (!cloud || !lbId) {
                 return JsonResponse.of([success: false, error: 'Missing cloud context or LB id'])
             }
+            if (ctx.network && !isCurrentUserNetworkOwner(model, ctx)) {
+                return JsonResponse.of([success: false, error: 'Access denied: only the network owner can update load balancers'])
+            }
 
             def result = lbService.update(cloud, tenantName, lbId, payload)
             log.info("loadbalancerUpdate() response for LB {}: success={}, msg={}, error={}", lbId, result.success, result.msg, result.error)
@@ -709,6 +817,9 @@ class OctaviaController implements PluginController {
             String tenantName = pool?.externalId ?: pool?.name
             if (!cloud || !lbId || !selection) {
                 return JsonResponse.of([success: false, error: 'Missing required parameters'])
+            }
+            if (ctx.network && !isCurrentUserNetworkOwner(model, ctx)) {
+                return JsonResponse.of([success: false, error: 'Access denied: only the network owner can attach floating IPs'])
             }
 
             // Resolve the LB VIP port id
@@ -774,6 +885,9 @@ class OctaviaController implements PluginController {
             if (!cloud || !lbId) {
                 return JsonResponse.of([success: false, error: 'Missing required parameters'])
             }
+            if (ctx.network && !isCurrentUserNetworkOwner(model, ctx)) {
+                return JsonResponse.of([success: false, error: 'Access denied: only the network owner can detach floating IPs'])
+            }
 
             def lbResp = lbService.get(cloud, tenantName, lbId.toString())
             if (!lbResp.success) {
@@ -815,6 +929,9 @@ class OctaviaController implements PluginController {
             }
 
             def ctx = resolveContext(model)
+            if (ctx.network && !isCurrentUserNetworkOwner(model, ctx)) {
+                return JsonResponse.of([data: [], optionClouds: [], resourcePools: []])
+            }
             def project = ctx.project
             def pool = ctx.pool 
             def cloud = ctx.cloud
@@ -867,6 +984,9 @@ class OctaviaController implements PluginController {
             }
 
             def ctx = resolveContext(model)
+            if (ctx.network && !isCurrentUserNetworkOwner(model, ctx)) {
+                return JsonResponse.of([data: []])
+            }
             def subnetsList = ctx.subnets
             
             if (subnetsList) {
@@ -915,6 +1035,9 @@ class OctaviaController implements PluginController {
             }
 
             def ctx = resolveContext(model)
+            if (ctx?.network && !isCurrentUserNetworkOwner(model, ctx)) {
+                return JsonResponse.of([data: []])
+            }
             if (ctx && (ctx.network || ctx.project)) {
                 def instances = lookupService.listInstances(ctx)
                 return JsonResponse.of([data: instances])
@@ -939,6 +1062,9 @@ class OctaviaController implements PluginController {
             def networkIdStr = getParam(model, 'networkId')
             if (networkIdStr) {
                 def ctx = resolveContext(model)
+                if (ctx.network && !isCurrentUserNetworkOwner(model, ctx)) {
+                    return JsonResponse.of([floatingIpPools: [], availableFloatingIps: []])
+                }
                 def cloud = ctx.cloud
                 def pool = ctx.pool
                 String tenantName = pool?.externalId ?: pool?.name

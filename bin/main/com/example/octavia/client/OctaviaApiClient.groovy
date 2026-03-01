@@ -42,6 +42,13 @@ class OctaviaApiClient {
     }
 
     /**
+     * Generic PATCH request (used by Octavia for listener/pool/healthmonitor updates)
+     */
+    ServiceResponse patch(String path, Map body) {
+        return call('PATCH', path, body)
+    }
+
+    /**
      * Generic DELETE request
      */
     ServiceResponse delete(String path) {

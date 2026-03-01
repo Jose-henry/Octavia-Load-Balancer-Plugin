@@ -1823,10 +1823,22 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
 
         const [tab, setTab] = React.useState('general');
         const [data, setData] = React.useState({ ...lb });
+        // Track which sections the user edited so we only send those to the API (avoids touching listener/pool when only name/description changed)
+        const [dirtySections, setDirtySections] = React.useState({ general: false, listener: false, pool: false, monitor: false });
 
         const vipSubnetDisplay = data.vip_subnet_display || lb.vip_subnet_display || data.vip_subnet_id || '';
         const [saving, setSaving] = React.useState(false);
         const [validationMsg, setValidationMsg] = React.useState('');
+
+        const FIELD_SECTION = {
+            name: 'general', description: 'general', admin_state_up: 'general',
+            listenerName: 'listener', listenerProtocol: 'listener', listenerPort: 'listener',
+            connectionLimit: 'listener', allowedCidrs: 'listener', listenerAdminStateUp: 'listener',
+            poolName: 'pool', poolAlgorithm: 'pool', poolProtocol: 'pool', poolDesc: 'pool',
+            poolAdminStateUp: 'pool', members: 'pool',
+            monitorName: 'monitor', monitorType: 'monitor', delay: 'monitor', timeout: 'monitor',
+            maxRetries: 'monitor', monitorAdminStateUp: 'monitor'
+        };
 
         // Load sub-resources
         const { loading, error, data: details } = useAsync(async () => {
@@ -1902,7 +1914,11 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
         }, [details]);
 
 
-        const update = (field, val) => setData(prev => ({ ...prev, [field]: val }));
+        const update = (field, val) => {
+            setData(prev => ({ ...prev, [field]: val }));
+            const section = FIELD_SECTION[field];
+            if (section) setDirtySections(prev => ({ ...prev, [section]: true }));
+        };
 
         function formatUpdateError(raw) {
             const isIpAddressError = typeof raw === 'string' && (
@@ -1919,7 +1935,8 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
         const save = () => {
             setValidationMsg('');
             setSaving(true);
-            Api.updateLoadBalancer(lb.id, data)
+            const updatedSections = Object.keys(dirtySections).filter(s => dirtySections[s]);
+            Api.updateLoadBalancer(lb.id, { ...data, updatedSections })
                 .then(res => {
                     setSaving(false);
                     if (res && res.success === false) {
@@ -2278,8 +2295,33 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
         const [reloadKey, setReloadKey] = React.useState(0);
         const [inlineLbs, setInlineLbs] = React.useState(null);
         const [floatingTarget, setFloatingTarget] = React.useState(null);
+        const [pollUntil, setPollUntil] = React.useState(null);
 
         const lbState = useAsync(() => Api.listLoadBalancers({ networkId }), [networkId, reloadKey]);
+
+        // After create: poll list every 15s so status (PENDING_CREATE -> ACTIVE) updates without manual refresh; stop after 5 min
+        React.useEffect(() => {
+            if (!pollUntil || !networkId) return;
+            const POLL_INTERVAL_MS = 15000;
+            const poll = () => {
+                Api.listLoadBalancers({ networkId }).then(r => {
+                    const list = r.loadbalancers || r.data?.loadbalancers || [];
+                    setInlineLbs(list);
+                }).catch(() => {});
+            };
+            const id = setInterval(() => {
+                if (Date.now() >= pollUntil) {
+                    clearInterval(id);
+                    setPollUntil(null);
+                    setInlineLbs(null);
+                    setReloadKey(k => k + 1);
+                    return;
+                }
+                poll();
+            }, POLL_INTERVAL_MS);
+            poll();
+            return () => clearInterval(id);
+        }, [pollUntil, networkId]);
 
         // Fetch options when wizard or edit is opened
         React.useEffect(() => {
@@ -2389,13 +2431,14 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                       {networkId: networkId, options: { ...options, subnets }, onClose: () => setView('list'), onCreated: () => {
                             setView('list');
                             setReloadKey(k => k + 1);
-                            setToast({ msg: 'Load Balancer created successfully.', type: 'success' });
+                            setToast({ msg: 'Load Balancer created successfully. Status will update automatically.', type: 'success' });
+                            setPollUntil(Date.now() + 5 * 60 * 1000);
                         }}
                     )
                 ),
               view === 'edit' && selectedLb && React.createElement(
                                    EditLBModalComp,
-                                   {lb: selectedLb, networkId: networkId, options: { ...options, subnets }, onClose: () => { setSelectedLb(null); setView('list'); }, onUpdated: () => { setSelectedLb(null); setView('list'); }}
+                                   {lb: selectedLb, networkId: networkId, options: { ...options, subnets }, onClose: () => { setSelectedLb(null); setView('list'); }, onUpdated: () => { setSelectedLb(null); setView('list'); setReloadKey(k => k + 1); setToast({ msg: 'Load balancer updated.', type: 'success' }); }}
                                  ),
               React.createElement(
                 "div",
@@ -2636,12 +2679,12 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
               {className: "container-fluid", style: { padding: '0 12px' }},
               React.createElement(
                 "h4",
-                {style: { textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.5px', color: '#2d6ca2', marginBottom: 15 }},
+                null,
                 "Load balancers associated with this instance"
               ),
               React.createElement(
                 "p",
-                {className: "text-muted", style: { marginBottom: 15, fontSize: '0.9em' }},
+                {className: "text-muted"},
                 "This instance is a pool member of the following load balancers. Click a name to manage it on the Network detail page."
               ),
               React.createElement(
@@ -2655,7 +2698,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                     null,
                     React.createElement(
                       "tr",
-                      {style: { textTransform: 'uppercase', fontSize: '0.85em', fontWeight: 600 }},
+                      null,
                       React.createElement(
                         "th",
                         null,
@@ -2705,7 +2748,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                                     null,
                                     React.createElement(
                                       "a",
-                                      {href: '/infrastructure/networks/' + (lb.networkId || '') + '#!octavia-network-tab', style: { fontWeight: 'bold', color: '#2d6ca2', textDecoration: 'none' }, title: "View in Network detail Octavia tab"},
+                                      {href: '/infrastructure/networks/' + (lb.networkId || '') + '#!load-balancer-network-tab', title: "View in Network detail Load Balancers tab"},
                                       lb.name
                                     )
                                   ),
@@ -2745,7 +2788,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                                     null,
                                     React.createElement(
                                       "a",
-                                      {href: '/infrastructure/networks/' + (lb.networkId || ''), style: { color: '#2d6ca2' }},
+                                      {href: '/infrastructure/networks/' + (lb.networkId || '') + '#!load-balancer-network-tab', title: "View network Load Balancers tab"},
                                       lb.networkName || 'View Network'
                                     )
                                   )

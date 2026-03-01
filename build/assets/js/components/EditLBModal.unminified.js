@@ -6,10 +6,22 @@
 
         const [tab, setTab] = React.useState('general');
         const [data, setData] = React.useState({ ...lb });
+        // Track which sections the user edited so we only send those to the API (avoids touching listener/pool when only name/description changed)
+        const [dirtySections, setDirtySections] = React.useState({ general: false, listener: false, pool: false, monitor: false });
 
         const vipSubnetDisplay = data.vip_subnet_display || lb.vip_subnet_display || data.vip_subnet_id || '';
         const [saving, setSaving] = React.useState(false);
         const [validationMsg, setValidationMsg] = React.useState('');
+
+        const FIELD_SECTION = {
+            name: 'general', description: 'general', admin_state_up: 'general',
+            listenerName: 'listener', listenerProtocol: 'listener', listenerPort: 'listener',
+            connectionLimit: 'listener', allowedCidrs: 'listener', listenerAdminStateUp: 'listener',
+            poolName: 'pool', poolAlgorithm: 'pool', poolProtocol: 'pool', poolDesc: 'pool',
+            poolAdminStateUp: 'pool', members: 'pool',
+            monitorName: 'monitor', monitorType: 'monitor', delay: 'monitor', timeout: 'monitor',
+            maxRetries: 'monitor', monitorAdminStateUp: 'monitor'
+        };
 
         // Load sub-resources
         const { loading, error, data: details } = useAsync(async () => {
@@ -85,7 +97,11 @@
         }, [details]);
 
 
-        const update = (field, val) => setData(prev => ({ ...prev, [field]: val }));
+        const update = (field, val) => {
+            setData(prev => ({ ...prev, [field]: val }));
+            const section = FIELD_SECTION[field];
+            if (section) setDirtySections(prev => ({ ...prev, [section]: true }));
+        };
 
         function formatUpdateError(raw) {
             const isIpAddressError = typeof raw === 'string' && (
@@ -102,7 +118,8 @@
         const save = () => {
             setValidationMsg('');
             setSaving(true);
-            Api.updateLoadBalancer(lb.id, data)
+            const updatedSections = Object.keys(dirtySections).filter(s => dirtySections[s]);
+            Api.updateLoadBalancer(lb.id, { ...data, updatedSections })
                 .then(res => {
                     setSaving(false);
                     if (res && res.success === false) {

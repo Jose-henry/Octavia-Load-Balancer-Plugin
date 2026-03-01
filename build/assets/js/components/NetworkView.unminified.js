@@ -18,8 +18,33 @@
         const [reloadKey, setReloadKey] = React.useState(0);
         const [inlineLbs, setInlineLbs] = React.useState(null);
         const [floatingTarget, setFloatingTarget] = React.useState(null);
+        const [pollUntil, setPollUntil] = React.useState(null);
 
         const lbState = useAsync(() => Api.listLoadBalancers({ networkId }), [networkId, reloadKey]);
+
+        // After create: poll list every 15s so status (PENDING_CREATE -> ACTIVE) updates without manual refresh; stop after 5 min
+        React.useEffect(() => {
+            if (!pollUntil || !networkId) return;
+            const POLL_INTERVAL_MS = 15000;
+            const poll = () => {
+                Api.listLoadBalancers({ networkId }).then(r => {
+                    const list = r.loadbalancers || r.data?.loadbalancers || [];
+                    setInlineLbs(list);
+                }).catch(() => {});
+            };
+            const id = setInterval(() => {
+                if (Date.now() >= pollUntil) {
+                    clearInterval(id);
+                    setPollUntil(null);
+                    setInlineLbs(null);
+                    setReloadKey(k => k + 1);
+                    return;
+                }
+                poll();
+            }, POLL_INTERVAL_MS);
+            poll();
+            return () => clearInterval(id);
+        }, [pollUntil, networkId]);
 
         // Fetch options when wizard or edit is opened
         React.useEffect(() => {
@@ -129,13 +154,14 @@
                       {networkId: networkId, options: { ...options, subnets }, onClose: () => setView('list'), onCreated: () => {
                             setView('list');
                             setReloadKey(k => k + 1);
-                            setToast({ msg: 'Load Balancer created successfully.', type: 'success' });
+                            setToast({ msg: 'Load Balancer created successfully. Status will update automatically.', type: 'success' });
+                            setPollUntil(Date.now() + 5 * 60 * 1000);
                         }}
                     )
                 ),
               view === 'edit' && selectedLb && React.createElement(
                                    EditLBModalComp,
-                                   {lb: selectedLb, networkId: networkId, options: { ...options, subnets }, onClose: () => { setSelectedLb(null); setView('list'); }, onUpdated: () => { setSelectedLb(null); setView('list'); }}
+                                   {lb: selectedLb, networkId: networkId, options: { ...options, subnets }, onClose: () => { setSelectedLb(null); setView('list'); }, onUpdated: () => { setSelectedLb(null); setView('list'); setReloadKey(k => k + 1); setToast({ msg: 'Load balancer updated.', type: 'success' }); }}
                                  ),
               React.createElement(
                 "div",
