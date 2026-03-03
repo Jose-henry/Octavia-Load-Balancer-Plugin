@@ -22,10 +22,11 @@
 
         const lbState = useAsync(() => Api.listLoadBalancers({ networkId }), [networkId, reloadKey]);
 
-        // After create: poll list every 15s so status (PENDING_CREATE -> ACTIVE) updates without manual refresh; stop after 5 min
+        // After create or update: poll list every few seconds so status (PENDING_* -> ACTIVE) updates without manual refresh
+        const POLL_INTERVAL_MS = 3000;
+        const POLL_DURATION_MS = 2 * 60 * 1000; // 2 min
         React.useEffect(() => {
             if (!pollUntil || !networkId) return;
-            const POLL_INTERVAL_MS = 15000;
             const poll = () => {
                 Api.listLoadBalancers({ networkId }).then(r => {
                     const list = r.loadbalancers || r.data?.loadbalancers || [];
@@ -96,6 +97,7 @@
             Api.deleteLoadBalancer(deleteTarget.id, networkId).then(() => {
                 setDeleting(false);
                 setDeleteTarget(null);
+                setInlineLbs(null); // so list shows refetched data, not stale poll cache
                 setReloadKey(k => k + 1);
                 setToast({ msg: 'Load Balancer deleted successfully.', type: 'success' });
             });
@@ -139,12 +141,12 @@
                         onCreated={() => {
                             setView('list');
                             setReloadKey(k => k + 1);
-                            setToast({ msg: 'Load Balancer created successfully. Status will update automatically.', type: 'success' });
-                            setPollUntil(Date.now() + 5 * 60 * 1000);
+                            setToast({ msg: 'Load Balancer created.', type: 'success' });
+                            setPollUntil(Date.now() + POLL_DURATION_MS);
                         }}
                     />
                 )}
-                {view === 'edit' && selectedLb && <EditLBModalComp lb={selectedLb} networkId={networkId} options={{ ...options, subnets }} onClose={() => { setSelectedLb(null); setView('list'); }} onUpdated={() => { setSelectedLb(null); setView('list'); setReloadKey(k => k + 1); setToast({ msg: 'Load balancer updated.', type: 'success' }); }} />}
+                {view === 'edit' && selectedLb && <EditLBModalComp lb={selectedLb} networkId={networkId} options={{ ...options, subnets }} onClose={() => { setSelectedLb(null); setView('list'); }} onUpdated={() => { setSelectedLb(null); setView('list'); setReloadKey(k => k + 1); setToast({ msg: 'Load balancer updated.', type: 'success' }); setPollUntil(Date.now() + POLL_DURATION_MS); }} />}
 
                 {/* Toolbar — ADD button */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '15px' }}>

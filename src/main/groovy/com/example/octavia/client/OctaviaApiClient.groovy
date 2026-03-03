@@ -70,9 +70,12 @@ class OctaviaApiClient {
         // Handle path having leading slash or not
         String fullPath = path.startsWith(this.baseUrl) ? path : "${this.baseUrl}${path.startsWith('/') ? '' : '/'}${path}"
         
-        // Log for debug (remove sensitive data in prod)
-        log.debug("OctaviaApiClient calling ${method} ${fullPath}")
-
-        return client.callJsonApi(fullPath, null,  opts, method)
+        log.info("[Octavia API] {} {}", method, fullPath)
+        ServiceResponse result = client.callJsonApi(fullPath, null, opts, method)
+        log.info("[Octavia API] {} -> success={}, error={}", fullPath, result?.success, result?.error ?: result?.msg)
+        if (!result?.success && result?.content) {
+            log.warn("[Octavia API] response body (first 500 chars): {}", result.content?.take(500))
+        }
+        return result
     }
 }

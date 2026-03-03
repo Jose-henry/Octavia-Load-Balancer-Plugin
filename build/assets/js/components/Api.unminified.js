@@ -91,7 +91,13 @@ window.Octavia = window.Octavia || {};
             },
 
             updateLoadBalancer: (lbId, payload) => {
-                return apiFetch(`${baseUrl}/loadbalancerUpdate`, { method: 'POST', body: JSON.stringify({ ...payload, id: lbId }) });
+                const body = { ...payload, id: lbId };
+                const q = [];
+                if (payload.listenerId) q.push('listenerId=' + encodeURIComponent(payload.listenerId));
+                if (payload.poolId) q.push('poolId=' + encodeURIComponent(payload.poolId));
+                if (payload.healthmonitorId) q.push('healthmonitorId=' + encodeURIComponent(payload.healthmonitorId));
+                const url = q.length ? `${baseUrl}/loadbalancerUpdate?${q.join('&')}` : `${baseUrl}/loadbalancerUpdate`;
+                return apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
             },
 
             deleteLoadBalancer: (lbId, networkId) => {

@@ -175,7 +175,13 @@ window.Octavia = window.Octavia || {};
             },
 
             updateLoadBalancer: (lbId, payload) => {
-                return apiFetch(`${baseUrl}/loadbalancerUpdate`, { method: 'POST', body: JSON.stringify({ ...payload, id: lbId }) });
+                const body = { ...payload, id: lbId };
+                const q = [];
+                if (payload.listenerId) q.push('listenerId=' + encodeURIComponent(payload.listenerId));
+                if (payload.poolId) q.push('poolId=' + encodeURIComponent(payload.poolId));
+                if (payload.healthmonitorId) q.push('healthmonitorId=' + encodeURIComponent(payload.healthmonitorId));
+                const url = q.length ? `${baseUrl}/loadbalancerUpdate?${q.join('&')}` : `${baseUrl}/loadbalancerUpdate`;
+                return apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
             },
 
             deleteLoadBalancer: (lbId, networkId) => {
@@ -1871,6 +1877,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                 }
                 if (details.listeners && details.listeners.length > 0) {
                     const l = details.listeners[0];
+                    newD.listenerId = l.id;
                     newD.createListener = true;
                     newD.listenerName = l.name;
                     newD.listenerProtocol = l.protocol;
@@ -1884,6 +1891,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
 
                 if (details.pools && details.pools.length > 0) {
                     const p = details.pools[0];
+                    newD.poolId = p.id;
                     newD.createPool = true;
                     newD.poolName = p.name;
                     newD.poolAlgorithm = p.lb_algorithm;
@@ -1898,6 +1906,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
 
                 if (details.monitor) {
                     const m = details.monitor;
+                    newD.healthmonitorId = m.id;
                     newD.createMonitor = true;
                     newD.monitorName = m.name || 'Monitor';
                     newD.monitorType = m.type;
@@ -2299,10 +2308,11 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
 
         const lbState = useAsync(() => Api.listLoadBalancers({ networkId }), [networkId, reloadKey]);
 
-        // After create: poll list every 15s so status (PENDING_CREATE -> ACTIVE) updates without manual refresh; stop after 5 min
+        // After create or update: poll list every few seconds so status (PENDING_* -> ACTIVE) updates without manual refresh
+        const POLL_INTERVAL_MS = 3000;
+        const POLL_DURATION_MS = 2 * 60 * 1000; // 2 min
         React.useEffect(() => {
             if (!pollUntil || !networkId) return;
-            const POLL_INTERVAL_MS = 15000;
             const poll = () => {
                 Api.listLoadBalancers({ networkId }).then(r => {
                     const list = r.loadbalancers || r.data?.loadbalancers || [];
@@ -2384,6 +2394,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
             Api.deleteLoadBalancer(deleteTarget.id, networkId).then(() => {
                 setDeleting(false);
                 setDeleteTarget(null);
+                setInlineLbs(null); // so list shows refetched data, not stale poll cache
                 setReloadKey(k => k + 1);
                 setToast({ msg: 'Load Balancer deleted successfully.', type: 'success' });
             });
@@ -2431,14 +2442,14 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                       {networkId: networkId, options: { ...options, subnets }, onClose: () => setView('list'), onCreated: () => {
                             setView('list');
                             setReloadKey(k => k + 1);
-                            setToast({ msg: 'Load Balancer created successfully. Status will update automatically.', type: 'success' });
-                            setPollUntil(Date.now() + 5 * 60 * 1000);
+                            setToast({ msg: 'Load Balancer created.', type: 'success' });
+                            setPollUntil(Date.now() + POLL_DURATION_MS);
                         }}
                     )
                 ),
               view === 'edit' && selectedLb && React.createElement(
                                    EditLBModalComp,
-                                   {lb: selectedLb, networkId: networkId, options: { ...options, subnets }, onClose: () => { setSelectedLb(null); setView('list'); }, onUpdated: () => { setSelectedLb(null); setView('list'); setReloadKey(k => k + 1); setToast({ msg: 'Load balancer updated.', type: 'success' }); }}
+                                   {lb: selectedLb, networkId: networkId, options: { ...options, subnets }, onClose: () => { setSelectedLb(null); setView('list'); }, onUpdated: () => { setSelectedLb(null); setView('list'); setReloadKey(k => k + 1); setToast({ msg: 'Load balancer updated.', type: 'success' }); setPollUntil(Date.now() + POLL_DURATION_MS); }}
                                  ),
               React.createElement(
                 "div",
@@ -2643,7 +2654,15 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
         const Api = window.Octavia.api;
         const { Badge, useAsync } = window.Octavia;
 
-        const lbState = useAsync(() => Api.listLoadBalancers({ instanceId }), [instanceId])
+        const [reloadKey, setReloadKey] = React.useState(0);
+        const lbState = useAsync(() => Api.listLoadBalancers({ instanceId }), [instanceId, reloadKey]);
+
+        // Revalidate periodically so changes made on Network tab (or elsewhere) show up without reload
+        React.useEffect(() => {
+            if (!instanceId) return;
+            const id = setInterval(() => setReloadKey(k => k + 1), 30 * 1000);
+            return () => clearInterval(id);
+        }, [instanceId]);
 
         if (lbState.error) return React.createElement(
                                     "div",
@@ -2667,11 +2686,32 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
             )
         }
         const lbs = lbState.data?.loadbalancers || []
-        if (lbs.length === 0) return React.createElement(
-                                       "div",
-                                       {className: "alert alert-info"},
-                                       "This instance is not a member of any Load Balancers."
-                                     )
+        if (lbs.length === 0) return (
+            React.createElement(
+              "div",
+              {className: "container-fluid", style: { padding: '0 12px' }},
+              React.createElement(
+                "h4",
+                null,
+                "Load balancers associated with this instance"
+              ),
+              React.createElement(
+                "p",
+                {className: "text-muted"},
+                "This instance is a pool member of the following load balancers. Click a name to manage it on the Network detail page."
+              ),
+              React.createElement(
+                "button",
+                {type: "button", className: "btn btn-default btn-sm", onClick: () => setReloadKey(k => k + 1)},
+                "Refresh"
+              ),
+              React.createElement(
+                "div",
+                {className: "alert alert-info", style: { marginTop: '12px' }},
+                "This instance is not a member of any Load Balancers."
+              )
+            )
+        );
 
         return (
             React.createElement(
@@ -2686,6 +2726,11 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                 "p",
                 {className: "text-muted"},
                 "This instance is a pool member of the following load balancers. Click a name to manage it on the Network detail page."
+              ),
+              React.createElement(
+                "button",
+                {type: "button", className: "btn btn-default btn-sm", onClick: () => setReloadKey(k => k + 1), style: { marginBottom: '12px' }},
+                "Refresh"
               ),
               React.createElement(
                 "div",
@@ -2788,7 +2833,7 @@ window.Octavia.DeleteConfirmModal = DeleteConfirmModal;
                                     null,
                                     React.createElement(
                                       "a",
-                                      {href: '/infrastructure/networks/' + (lb.networkId || '') + '#!load-balancer-network-tab', title: "View network Load Balancers tab"},
+                                      {href: '/infrastructure/networks/' + (lb.networkId || ''), title: "View network Load Balancers tab"},
                                       lb.networkName || 'View Network'
                                     )
                                   )

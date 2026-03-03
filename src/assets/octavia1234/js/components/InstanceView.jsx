@@ -3,7 +3,15 @@
         const Api = window.Octavia.api;
         const { Badge, useAsync } = window.Octavia;
 
-        const lbState = useAsync(() => Api.listLoadBalancers({ instanceId }), [instanceId])
+        const [reloadKey, setReloadKey] = React.useState(0);
+        const lbState = useAsync(() => Api.listLoadBalancers({ instanceId }), [instanceId, reloadKey]);
+
+        // Revalidate periodically so changes made on Network tab (or elsewhere) show up without reload
+        React.useEffect(() => {
+            if (!instanceId) return;
+            const id = setInterval(() => setReloadKey(k => k + 1), 30 * 1000);
+            return () => clearInterval(id);
+        }, [instanceId]);
 
         if (lbState.error) return <div className="alert alert-danger">{lbState.error.message}</div>
         if (lbState.loading) {
@@ -16,12 +24,20 @@
             )
         }
         const lbs = lbState.data?.loadbalancers || []
-        if (lbs.length === 0) return <div className="alert alert-info">This instance is not a member of any Load Balancers.</div>
+        if (lbs.length === 0) return (
+            <div className="container-fluid" style={{ padding: '0 12px' }}>
+                <h4>Load balancers associated with this instance</h4>
+                <p className="text-muted">This instance is a pool member of the following load balancers. Click a name to manage it on the Network detail page.</p>
+                <button type="button" className="btn btn-default btn-sm" onClick={() => setReloadKey(k => k + 1)}>Refresh</button>
+                <div className="alert alert-info" style={{ marginTop: '12px' }}>This instance is not a member of any Load Balancers.</div>
+            </div>
+        );
 
         return (
             <div className="container-fluid" style={{ padding: '0 12px' }}>
                 <h4>Load balancers associated with this instance</h4>
                 <p className="text-muted">This instance is a pool member of the following load balancers. Click a name to manage it on the Network detail page.</p>
+                <button type="button" className="btn btn-default btn-sm" onClick={() => setReloadKey(k => k + 1)} style={{ marginBottom: '12px' }}>Refresh</button>
                 <div className="table-responsive">
                     <table className="table table-striped table-hover">
                         <thead>
@@ -60,7 +76,7 @@
                                     </td>
                                     <td>{lb.membersCount != null ? lb.membersCount : (lb.members || []).length}</td>
                                     <td>
-                                        <a href={'/infrastructure/networks/' + (lb.networkId || '') + '#!load-balancer-network-tab'}
+                                        <a href={'/infrastructure/networks/' + (lb.networkId || '')}
                                             title="View network Load Balancers tab">
                                             {lb.networkName || 'View Network'}
                                         </a>

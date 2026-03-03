@@ -3,7 +3,15 @@
         const Api = window.Octavia.api;
         const { Badge, useAsync } = window.Octavia;
 
-        const lbState = useAsync(() => Api.listLoadBalancers({ instanceId }), [instanceId])
+        const [reloadKey, setReloadKey] = React.useState(0);
+        const lbState = useAsync(() => Api.listLoadBalancers({ instanceId }), [instanceId, reloadKey]);
+
+        // Revalidate periodically so changes made on Network tab (or elsewhere) show up without reload
+        React.useEffect(() => {
+            if (!instanceId) return;
+            const id = setInterval(() => setReloadKey(k => k + 1), 30 * 1000);
+            return () => clearInterval(id);
+        }, [instanceId]);
 
         if (lbState.error) return React.createElement(
                                     "div",
@@ -27,11 +35,32 @@
             )
         }
         const lbs = lbState.data?.loadbalancers || []
-        if (lbs.length === 0) return React.createElement(
-                                       "div",
-                                       {className: "alert alert-info"},
-                                       "This instance is not a member of any Load Balancers."
-                                     )
+        if (lbs.length === 0) return (
+            React.createElement(
+              "div",
+              {className: "container-fluid", style: { padding: '0 12px' }},
+              React.createElement(
+                "h4",
+                null,
+                "Load balancers associated with this instance"
+              ),
+              React.createElement(
+                "p",
+                {className: "text-muted"},
+                "This instance is a pool member of the following load balancers. Click a name to manage it on the Network detail page."
+              ),
+              React.createElement(
+                "button",
+                {type: "button", className: "btn btn-default btn-sm", onClick: () => setReloadKey(k => k + 1)},
+                "Refresh"
+              ),
+              React.createElement(
+                "div",
+                {className: "alert alert-info", style: { marginTop: '12px' }},
+                "This instance is not a member of any Load Balancers."
+              )
+            )
+        );
 
         return (
             React.createElement(
@@ -46,6 +75,11 @@
                 "p",
                 {className: "text-muted"},
                 "This instance is a pool member of the following load balancers. Click a name to manage it on the Network detail page."
+              ),
+              React.createElement(
+                "button",
+                {type: "button", className: "btn btn-default btn-sm", onClick: () => setReloadKey(k => k + 1), style: { marginBottom: '12px' }},
+                "Refresh"
               ),
               React.createElement(
                 "div",
@@ -148,7 +182,7 @@
                                     null,
                                     React.createElement(
                                       "a",
-                                      {href: '/infrastructure/networks/' + (lb.networkId || '') + '#!load-balancer-network-tab', title: "View network Load Balancers tab"},
+                                      {href: '/infrastructure/networks/' + (lb.networkId || ''), title: "View network Load Balancers tab"},
                                       lb.networkName || 'View Network'
                                     )
                                   )

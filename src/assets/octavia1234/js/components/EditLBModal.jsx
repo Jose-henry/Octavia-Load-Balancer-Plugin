@@ -54,6 +54,7 @@
                 }
                 if (details.listeners && details.listeners.length > 0) {
                     const l = details.listeners[0];
+                    newD.listenerId = l.id;
                     newD.createListener = true;
                     newD.listenerName = l.name;
                     newD.listenerProtocol = l.protocol;
@@ -67,6 +68,7 @@
 
                 if (details.pools && details.pools.length > 0) {
                     const p = details.pools[0];
+                    newD.poolId = p.id;
                     newD.createPool = true;
                     newD.poolName = p.name;
                     newD.poolAlgorithm = p.lb_algorithm;
@@ -81,6 +83,7 @@
 
                 if (details.monitor) {
                     const m = details.monitor;
+                    newD.healthmonitorId = m.id;
                     newD.createMonitor = true;
                     newD.monitorName = m.name || 'Monitor';
                     newD.monitorType = m.type;

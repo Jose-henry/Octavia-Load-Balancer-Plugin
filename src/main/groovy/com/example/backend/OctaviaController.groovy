@@ -762,6 +762,14 @@ class OctaviaController implements PluginController {
         log.info("update load balancer called")
         try {
             def payload = parseRequestBody(model)
+            // IDs can come from query string so clients can pass them in the URL (payload body may not have them yet)
+            def request = model.object?.request
+            if (request) {
+                ['listenerId', 'poolId', 'healthmonitorId'].each { String name ->
+                    def q = request.getParameter(name)
+                    if (q != null && q.toString().trim() && payload[name] == null) payload[name] = q.toString().trim()
+                }
+            }
             def lbId = payload.id
             log.info("loadbalancerUpdate() request payload for LB {}: {}", lbId, groovy.json.JsonOutput.toJson(payload))
 
