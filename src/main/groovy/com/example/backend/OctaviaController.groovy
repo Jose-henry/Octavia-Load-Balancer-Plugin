@@ -77,12 +77,10 @@ class OctaviaController implements PluginController {
         def routes = [
             // Diagnostic endpoint - minimal test case
             Route.build("/octavia1234/ping",               "ping",                perm),
-            Route.build("/octavia1234/debugInstances",     "debugInstances",      perm),
-            Route.build("/octavia1234/debugNetwork",       "debugNetwork",        perm),
-            Route.build("/octavia1234/debugCloud",         "debugCloud",          perm),
 
             // Primary routes using {pluginCode}/{action} format (like BigIP pattern)
             Route.build("/octavia1234/loadbalancers",      "loadbalancers",       perm),
+            Route.build("/octavia1234/loadbalancersFromDb", "loadbalancersFromDb", perm),
             Route.build("/octavia1234/loadbalancersCreate", "loadbalancersCreate", perm),
             Route.build("/octavia1234/loadbalancersDelete", "loadbalancersDelete", perm),
             Route.build("/octavia1234/loadbalancerDetails", "loadbalancerDetails", perm),
@@ -127,95 +125,6 @@ class OctaviaController implements PluginController {
         } catch (Exception ex) {
             log.error("ping() failed: {}", ex.message, ex)
             return JsonResponse.of([status: 'error', message: ex.message])
-        }
-    }
-
-    def debugInstances(ViewModel<Map> model) {
-        log.info("debugInstances endpoint called")
-        try {
-            def userIdentity = model.user  // Get current user
-            def accountId = userIdentity?.account?.id  // Get their account/tenant
-            
-            def query = new com.morpheusdata.core.data.DataQuery(userIdentity)
-            query.max = 5000000L
-            query.withJoin("server")  // Join to ComputeServer
-            query.withJoin("instance")  // Join to Instance
-            
-            def workloads = lookupService.morpheus.async.workload.list(query).toList().blockingGet() ?: []
-            
-            return JsonResponse.of([
-                message: "Fetched ${workloads.size()} instances for account ${accountId}",
-                instances: workloads*.properties
-            ])
-        } catch (Exception ex) {
-            log.error("Error in debugInstances", ex)
-            return JsonResponse.of([error: ex.message])
-        }
-    }
-
-    def debugNetwork(ViewModel<Map> model) {
-        log.info("debugNetwork endpoint called")
-        try {
-            def networkIdStr = getParam(model, 'networkId')
-            if (!networkIdStr) {
-                def query = new com.morpheusdata.core.data.DataQuery()
-                query.max = 50L
-                def allNetworks = lookupService.morpheus.async.network.list(query).toList().blockingGet() ?: []
-                return JsonResponse.of([
-                    message: "Pass ?networkId=XXX to debug a specific network. Here are the first 50:",
-                    availableNetworks: allNetworks.collect { [id: it.id, name: it.name, cloudId: it.cloud?.id] }
-                ])
-            }
-            
-            def networkId = networkIdStr.toLong()
-            def network = lookupService.morpheus.async.network.get(networkId).blockingGet()
-            
-            if (network) {
-                // Get subnets for the SPECIFIC network by passing the network object
-                def subnets = lookupService.morpheus.async.network.subnet.listIdentityProjections(network).toList().blockingGet() ?: []
-                
-                // Or use DataQuery to filter by networkId
-                def subnetQuery = new com.morpheusdata.core.data.DataQuery()
-                subnetQuery.withFilter("network.id", networkId)
-                def subnetsAlt = lookupService.morpheus.async.network.subnet.list(subnetQuery).toList().blockingGet() ?: []
-                
-                return JsonResponse.of([
-                    network: network, 
-                    subnets: subnets.collect { [id: it.id, name: it.name, cidr: it.cidr] }
-                ])
-            }
-            return JsonResponse.of([error: "Network not found"])
-        } catch (Exception ex) {
-            log.error("Error in debugNetwork", ex)
-            return JsonResponse.of([error: ex.message])
-        }
-    }
-    
-    def debugCloud(ViewModel<Map> model) {
-        try {
-            def cloudIdStr = getParam(model, 'cloudId')
-            if (!cloudIdStr) {
-                def allClouds = lookupService.morpheus.async.cloud.list(new com.morpheusdata.core.data.DataQuery()).toList().blockingGet()
-                return JsonResponse.of([
-                    message: "Pass ?cloudId=XXX to debug a specific cloud.",
-                    availableClouds: allClouds.collect { [id: it.id, name: it.name, code: it.code] }
-                ])
-            }
-            
-            def cloudId = cloudIdStr.toLong()
-            def cloud = lookupService.morpheus.async.cloud.get(cloudId).blockingGet()
-            if (!cloud) return JsonResponse.of([error: "Cloud not found"])
-            
-            def auth = this.authService.authenticate(cloud)
-            return JsonResponse.of([
-                cloudName: cloud.name,
-                cloudId: cloud.id,
-                cloudCode: cloud.code,
-                authValid: auth.success,
-                authError: auth.msg ?: "None"
-            ])
-        } catch (Exception ex) {
-            return JsonResponse.of([error: ex.message])
         }
     }
 
@@ -500,10 +409,150 @@ class OctaviaController implements PluginController {
                 ]
             }
 
+            // Optional max/offset to reduce payload and load (e.g. many tenants, large LB lists)
+            def maxParam = getParam(model, 'max')
+            def offsetParam = getParam(model, 'offset')
+            int total = mappedLbs.size()
+            if (maxParam?.trim()?.isNumber()) {
+                int maxVal = Math.max(1, Integer.parseInt(maxParam.trim()))
+                int offsetVal = 0
+                if (offsetParam?.trim()?.isNumber()) offsetVal = Math.max(0, Integer.parseInt(offsetParam.trim()))
+                int from = Math.min(offsetVal, total)
+                int to = Math.min(offsetVal + maxVal, total)
+                mappedLbs = mappedLbs.subList(from, to)
+                return JsonResponse.of([loadbalancers: mappedLbs, total: total])
+            }
             return JsonResponse.of([loadbalancers: mappedLbs])
         } catch (Exception ex) {
             log.error("loadbalancers() failed: {}", ex.message, ex)
             return JsonResponse.of([success: false, error: ex.message])
+        }
+    }
+
+    /**
+     * List load balancers from the Morpheus DB (synced from Octavia).
+     *
+     * Tenant scoping (Morpheus token):
+     * - Master tenant: GET with no params returns all LBs across all tenancies. Use accountid to filter by a specific tenant.
+     * - Regular tenant: GET returns only that tenant's LBs. Passing accountid for another tenant returns an error.
+     *
+     * Query params (all optional):
+     * - accountid: Morpheus account id to filter by (master only; regular tenants cannot use it to see other tenants).
+     * - cloud, network, instance, project: as before.
+     */
+    def loadbalancersFromDb(ViewModel<Map> model) {
+        log.info("loadbalancersFromDb endpoint called")
+        try {
+            def currentAccountId = model?.user?.account?.id
+            def isMasterTenant = model?.user?.account?.masterAccount == true
+            def accountIdParam = getParam(model, 'accountid')
+            def requestedAccountId = accountIdParam?.trim()?.isNumber() ? Long.parseLong(accountIdParam.trim()) : null
+
+            if (currentAccountId == null) {
+                log.warn("loadbalancersFromDb: no account context (token must have account)")
+                return JsonResponse.of([success: false, loadbalancers: [], error: 'Account context required for tenant scoping'])
+            }
+
+            if (requestedAccountId != null && !isMasterTenant && requestedAccountId != currentAccountId) {
+                log.warn("loadbalancersFromDb: tenant {} attempted to list LBs for account {}", currentAccountId, requestedAccountId)
+                return JsonResponse.of([success: false, loadbalancers: [], error: 'Access denied: you can only list load balancers for your own tenant'])
+            }
+
+            def filterAccountId = null
+            if (requestedAccountId != null) {
+                filterAccountId = requestedAccountId
+            } else if (!isMasterTenant) {
+                filterAccountId = currentAccountId
+            }
+            def resolveAccountId = filterAccountId ?: currentAccountId
+
+            def cloud = null
+            String tenantName = null
+            def networkParam = getParam(model, 'network') ?: getParam(model, 'networkId')
+            def instanceParam = getParam(model, 'instance') ?: getParam(model, 'instanceId')
+            def cloudParam = getParam(model, 'cloud')
+            def projectParam = getParam(model, 'project')
+
+            if (networkParam?.trim()) {
+                def networkId = lookupService.resolveNetworkIdByIdOrName(networkParam.trim(), resolveAccountId)
+                if (networkId != null) {
+                    def ctx = lookupService.getNetworkContext(networkId)
+                    if (ctx.network && !isCurrentUserNetworkOwner(model, ctx)) {
+                        return JsonResponse.of([loadbalancers: []])
+                    }
+                    cloud = cloud ?: ctx.cloud
+                    if (ctx.pool) tenantName = tenantName ?: (ctx.pool.externalId ?: ctx.pool.name)
+                }
+            }
+            if (instanceParam?.trim()) {
+                def instanceId = lookupService.resolveInstanceIdByIdOrName(instanceParam.trim(), resolveAccountId)
+                if (instanceId != null) {
+                    def ctx = lookupService.getInstanceContext(instanceId)
+                    cloud = cloud ?: ctx.cloud
+                    if (ctx.pool) tenantName = tenantName ?: (ctx.pool.externalId ?: ctx.pool.name)
+                }
+            }
+            if (cloudParam?.trim()?.isNumber()) {
+                cloud = cloud ?: morpheusContext.async.cloud.getCloudById(Long.parseLong(cloudParam.trim()))?.blockingGet()
+            }
+            if (projectParam?.trim()) {
+                tenantName = tenantName ?: lookupService.resolveProjectTenantName(projectParam.trim(), resolveAccountId)
+            }
+
+            // NetworkLoadBalancer has owner (set in OctaviaLoadBalancerSync from cloud.owner); filter by owner.id for tenant scoping.
+            def query = new com.morpheusdata.core.data.DataQuery()
+            if (filterAccountId != null) {
+                query = query.withFilter('owner.id', filterAccountId)
+            }
+            if (cloud != null) {
+                query = query.withFilter('cloud.id', cloud.id)
+            }
+            if (tenantName != null && tenantName.trim()) {
+                query = query.withFilter('internalId', tenantName.trim())
+            }
+
+            def maxParam = getParam(model, 'max')
+            def offsetParam = getParam(model, 'offset')
+            if (maxParam?.trim()?.isNumber()) {
+                try {
+                    long maxVal = Math.max(1L, Long.parseLong(maxParam.trim()))
+                    long offsetVal = 0L
+                    if (offsetParam?.trim()?.isNumber()) offsetVal = Math.max(0L, Long.parseLong(offsetParam.trim()))
+                    query = query.withMax(maxVal).withOffset(offsetVal)
+                } catch (Exception e) {
+                    log.debug("loadbalancersFromDb: invalid max/offset, ignoring: {}", e.message)
+                }
+            }
+
+            def projections = morpheusContext.async.loadBalancer.listIdentityProjections(query).toList().blockingGet() ?: []
+            def list = projections.collect { p ->
+                [
+                    id                  : p.id,
+                    name                : p.name,
+                    externalId          : p.externalId,
+                    vip_address         : p.internalIp,
+                    internalIp          : p.internalIp,
+                    provisioning_status : mapMorpheusStatusToOctavia(p.status ?: ''),
+                    status              : p.status,
+                    description         : p.description,
+                    internalId          : p.internalId
+                ]
+            }
+
+            def result = [success: true, loadbalancers: list]
+            if (maxParam?.trim()?.isNumber()) {
+                def countQuery = new com.morpheusdata.core.data.DataQuery()
+                if (filterAccountId != null) countQuery = countQuery.withFilter('owner.id', filterAccountId)
+                if (cloud != null) countQuery = countQuery.withFilter('cloud.id', cloud.id)
+                if (tenantName != null && tenantName.trim()) countQuery = countQuery.withFilter('internalId', tenantName.trim())
+                def totalProjections = morpheusContext.async.loadBalancer.listIdentityProjections(countQuery).toList().blockingGet() ?: []
+                result.total = totalProjections.size()
+            }
+            log.info("loadbalancersFromDb: master={}, filterAccountId={}, cloud={}, tenant={}, count={}", isMasterTenant, filterAccountId, cloud?.id, tenantName, list.size())
+            return JsonResponse.of(result)
+        } catch (Exception ex) {
+            log.error("loadbalancersFromDb failed: {}", ex.message, ex)
+            return JsonResponse.of([success: false, error: ex.message, loadbalancers: []])
         }
     }
 

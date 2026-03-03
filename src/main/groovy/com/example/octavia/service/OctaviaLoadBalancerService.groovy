@@ -169,8 +169,9 @@ class OctaviaLoadBalancerService {
     /**
      * Poll until load balancer provisioning_status is ACTIVE or timeout.
      * We poll continuously; as soon as ACTIVE we return and the next update proceeds (no extra delay).
+     * Tuned for faster feedback: 250ms poll, 20s max wait.
      */
-    private boolean waitForLbActive(Cloud cloud, String projectId, String lbId, int maxWaitMs = 45000, int pollIntervalMs = 1000) {
+    private boolean waitForLbActive(Cloud cloud, String projectId, String lbId, int maxWaitMs = 20000, int pollIntervalMs = 250) {
         long deadline = System.currentTimeMillis() + maxWaitMs
         while (System.currentTimeMillis() < deadline) {
             ServiceResponse resp = get(cloud, projectId, lbId)
@@ -283,6 +284,12 @@ class OctaviaLoadBalancerService {
                      }
                      List payloadMembers = payload.members instanceof List ? payload.members : null
                      if (success && payloadMembers != null) {
+                         // Octavia rejects member add/remove while pool/LB is PENDING_UPDATE; wait for ACTIVE after any pool PUT
+                         if (poolUpdates && !waitForLbActive(cloud, projectId, lbId)) {
+                             success = false
+                             errors << "Pool was updated but load balancer did not return to ACTIVE in time; member changes were not applied. Try saving again."
+                         }
+                         if (success) {
                          List toRemove = currentMembers.findAll { c ->
                              def cid = (c?.id ?: '').toString().trim()
                              def pm = payloadMembers.find { (it?.id ?: '').toString().trim() == cid }
@@ -293,20 +300,24 @@ class OctaviaLoadBalancerService {
                          }
                          List toAdd = payloadMembers.findAll { m ->
                              def mid = (m?.id ?: '').toString().trim()
-                             if (!mid) return true
                              def cur = currentMembers.find { (it?.id ?: '').toString().trim() == mid }
-                             if (!cur) return false
+                             if (!cur) return true  // new member (not in Octavia yet) -> add
                              def addrEq = (m?.address ?: m?.value ?: '').toString().trim() == (cur?.address ?: '').toString().trim()
                              def portEq = (m?.protocol_port != null ? m.protocol_port : (m?.port != null ? m.port : 80)) == (cur?.protocol_port != null ? cur.protocol_port : 80)
-                             !addrEq || !portEq
+                             !addrEq || !portEq   // existing member but address/port changed -> remove old + add new
                          }
+                         log.info("[Octavia LB Update] Members fast path: poolId={}, currentCount={}, payloadCount={}, toRemove={}, toAdd={}", poolId, currentMembers.size(), payloadMembers.size(), toRemove.size(), toAdd.size())
                          toRemove.each { m ->
                              String mid = (m?.id ?: '').toString()
                              if (!mid) return
+                             log.info("[Octavia LB Update] Members: DELETE pool {} member {}", poolId, mid)
                              ServiceResponse dr = client.delete("/v2.0/lbaas/pools/${poolId}/members/${mid}")
                              if (!dr.success) {
                                  success = false
                                  errors << (extractOctaviaError(dr, "Remove member ${mid}") ?: "Remove member failed")
+                                 log.warn("[Octavia LB Update] Members: DELETE member {} failed: {}", mid, dr.msg ?: dr.error)
+                             } else {
+                                 log.info("[Octavia LB Update] Members: DELETE member {} success", mid)
                              }
                          }
                          toAdd.each { m ->
@@ -316,9 +327,17 @@ class OctaviaLoadBalancerService {
                                  Map memberBody = [member: [address: addr, protocol_port: port as Integer, weight: (m?.weight != null ? m.weight : 1), admin_state_up: m?.admin_state_up != false]]
                                  if (m?.name) memberBody.member.name = m.name.toString()
                                  if (m?.subnet_id) memberBody.member.subnet_id = m.subnet_id.toString()
+                                 log.info("[Octavia LB Update] Members: POST pool {} add member {}:{}", poolId, addr, port)
                                  ServiceResponse ar = client.post("/v2.0/lbaas/pools/${poolId}/members", memberBody)
-                                 if (!ar.success) { success = false; errors << (extractOctaviaError(ar, "Add member ${addr}:${port}") ?: "Add member failed") }
+                                 if (!ar.success) {
+                                     success = false
+                                     errors << (extractOctaviaError(ar, "Add member ${addr}:${port}") ?: "Add member failed")
+                                     log.warn("[Octavia LB Update] Members: POST add member {}:{} failed: {}", addr, port, ar.msg ?: ar.error)
+                                 } else {
+                                     log.info("[Octavia LB Update] Members: POST add member {}:{} success", addr, port)
+                                 }
                              }
+                         }
                          }
                      }
                  } else {
@@ -442,11 +461,19 @@ class OctaviaLoadBalancerService {
                       }
 
                       // Step 6: Member add/remove/update — sync payload.members with Octavia (Octavia has no PATCH member; "update" = remove + add)
+                      // Octavia rejects member changes while LB/pool is PENDING_UPDATE; wait for ACTIVE if we did listener/pool/monitor updates
                       boolean memberSectionRequested = (updatedSections == null || (updatedSections instanceof List && updatedSections.contains('pool')))
                       List payloadMembers = payload.members instanceof List ? payload.members : null
                       if (success && memberSectionRequested && payloadMembers != null && resolvedPoolId) {
+                          boolean didNestedUpdates = (doListener && resolvedLisId) || (doPoolOrMonitorSection && resolvedPoolId)
+                          if (didNestedUpdates && !waitForLbActive(cloud, projectId, lbId)) {
+                              success = false
+                              errors << "Listener/pool/monitor were updated but load balancer did not return to ACTIVE in time; member changes were not applied. Try saving again."
+                          }
+                          if (success) {
                           ServiceResponse listMemResp = client.get("/v2.0/lbaas/pools/${resolvedPoolId}/members")
                           List currentMembers = listMemResp.success && listMemResp.data?.members ? listMemResp.data.members : []
+                          log.info("[Octavia LB Update] Step 6: GET members pool={}, currentCount={}, payloadCount={}", resolvedPoolId, currentMembers.size(), payloadMembers?.size())
                           List toRemove = currentMembers.findAll { c ->
                               def cid = (c?.id ?: '').toString().trim()
                               def pm = payloadMembers.find { (it?.id ?: '').toString().trim() == cid }
@@ -457,21 +484,24 @@ class OctaviaLoadBalancerService {
                           }
                           List toAdd = payloadMembers.findAll { m ->
                               def mid = (m?.id ?: '').toString().trim()
-                              if (!mid) return true
                               def cur = currentMembers.find { (it?.id ?: '').toString().trim() == mid }
-                              if (!cur) return false
+                              if (!cur) return true   // new member (not in Octavia yet) -> add
                               def addrEq = (m?.address ?: m?.value ?: '').toString().trim() == (cur?.address ?: '').toString().trim()
                               def portEq = (m?.protocol_port != null ? m.protocol_port : (m?.port != null ? m.port : 80)) == (cur?.protocol_port != null ? cur.protocol_port : 80)
                               !addrEq || !portEq
                           }
-                          log.info("[Octavia LB Update] Step 6: members current={}, payload={}, toAdd={}, toRemove={}", currentMembers.size(), payloadMembers.size(), toAdd.size(), toRemove.size())
+                          log.info("[Octavia LB Update] Step 6: toRemove={}, toAdd={} (toRemove ids: {}, toAdd addrs: {})", toRemove.size(), toAdd.size(), toRemove.collect { (it?.id ?: '')?.toString() }, toAdd.collect { (it?.address ?: it?.value ?: '')?.toString() })
                           toRemove.each { m ->
                               String mid = (m?.id ?: '').toString()
                               if (!mid) return
+                              log.info("[Octavia LB Update] Step 6: DELETE member {} from pool {}", mid, resolvedPoolId)
                               ServiceResponse dr = client.delete("/v2.0/lbaas/pools/${resolvedPoolId}/members/${mid}")
                               if (!dr.success) {
                                   success = false
                                   errors << (extractOctaviaError(dr, "Remove member ${mid}") ?: "Remove member failed")
+                                  log.warn("[Octavia LB Update] Step 6: DELETE member {} failed: {}", mid, dr.msg ?: dr.error)
+                              } else {
+                                  log.info("[Octavia LB Update] Step 6: DELETE member {} success", mid)
                               }
                           }
                           toAdd.each { m ->
@@ -481,11 +511,16 @@ class OctaviaLoadBalancerService {
                               Map memberBody = [member: [address: addr, protocol_port: port as Integer, weight: (m?.weight != null ? m.weight : 1), admin_state_up: m?.admin_state_up != false]]
                               if (m?.name) memberBody.member.name = m.name.toString()
                               if (m?.subnet_id) memberBody.member.subnet_id = m.subnet_id.toString()
+                              log.info("[Octavia LB Update] Step 6: POST add member {}:{} to pool {}", addr, port, resolvedPoolId)
                               ServiceResponse ar = client.post("/v2.0/lbaas/pools/${resolvedPoolId}/members", memberBody)
                               if (!ar.success) {
                                   success = false
                                   errors << (extractOctaviaError(ar, "Add member ${addr}:${port}") ?: "Add member failed")
+                                  log.warn("[Octavia LB Update] Step 6: POST add member {}:{} failed: {}", addr, port, ar.msg ?: ar.error)
+                              } else {
+                                  log.info("[Octavia LB Update] Step 6: POST add member {}:{} success", addr, port)
                               }
+                          }
                           }
                       }
                  }

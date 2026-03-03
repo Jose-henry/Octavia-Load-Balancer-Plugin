@@ -19,16 +19,21 @@
         const [inlineLbs, setInlineLbs] = React.useState(null);
         const [floatingTarget, setFloatingTarget] = React.useState(null);
         const [pollUntil, setPollUntil] = React.useState(null);
+        const [page, setPage] = React.useState(1);
 
-        const lbState = useAsync(() => Api.listLoadBalancers({ networkId }), [networkId, reloadKey]);
+        const PAGE_SIZE = 4;
+        const lbState = useAsync(
+            () => Api.listLoadBalancers({ networkId, max: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }),
+            [networkId, reloadKey, page]
+        );
 
-        // After create or update: poll list every few seconds so status (PENDING_* -> ACTIVE) updates without manual refresh
-        const POLL_INTERVAL_MS = 3000;
+        // After create or update: poll list every 30s so status (PENDING_* -> ACTIVE) updates without manual refresh
+        const POLL_INTERVAL_MS = 30 * 1000;
         const POLL_DURATION_MS = 2 * 60 * 1000; // 2 min
         React.useEffect(() => {
             if (!pollUntil || !networkId) return;
             const poll = () => {
-                Api.listLoadBalancers({ networkId }).then(r => {
+                Api.listLoadBalancers({ networkId, max: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE }).then(r => {
                     const list = r.loadbalancers || r.data?.loadbalancers || [];
                     setInlineLbs(list);
                 }).catch(() => {});
@@ -45,7 +50,7 @@
             }, POLL_INTERVAL_MS);
             poll();
             return () => clearInterval(id);
-        }, [pollUntil, networkId]);
+        }, [pollUntil, networkId, page]);
 
         // Fetch options when wizard or edit is opened
         React.useEffect(() => {
@@ -79,12 +84,21 @@
             }).catch(e => console.error(e));
         }, [networkId]);
 
+        // Clamp page to totalPages when total changes; only when not loading so we don't reset page during refetch (fixes next-page flip-back)
+        const totalFromData = lbState.data?.total != null ? lbState.data.total : (lbState.data?.loadbalancers || []).length;
+        const totalPagesStable = Math.max(1, Math.ceil(totalFromData / PAGE_SIZE));
+        React.useEffect(() => {
+            if (!lbState.loading) setPage(p => Math.min(p, totalPagesStable));
+        }, [totalPagesStable, lbState.loading]);
+
         if (lbState.error) return React.createElement(
                                     "div",
                                     {className: "alert alert-danger"},
                                     lbState.error.message
                                   );
-        if (lbState.loading && !inlineLbs) {
+        // Full loading mask only when we have no data (initial load). When changing page, keep showing current page until fetch completes.
+        const hasDataToShow = inlineLbs || (lbState.data && (lbState.data.loadbalancers?.length || lbState.data.total === 0));
+        if (lbState.loading && !hasDataToShow) {
             return (
                 React.createElement(
                   "div",
@@ -101,7 +115,12 @@
             );
         }
 
-        const lbs = inlineLbs || lbState.data.loadbalancers || [];
+        const lbs = inlineLbs || lbState.data?.loadbalancers || [];
+        const total = lbState.data?.total != null ? lbState.data.total : lbs.length;
+        const MAX_PAGE_BUTTONS = 6;
+        const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        const currentPage = Math.min(Math.max(1, page), totalPages);
+        const pageLbs = lbs;
 
         const handleDelete = () => {
             setDeleting(true);
@@ -138,11 +157,8 @@
                             return Api.attachFloatingIp(floatingTarget.id, selection, networkId)
                                 .then(() => {
                                     setFloatingTarget(null);
-                                    // Refresh list in background without triggering global loader
-                                    return Api.listLoadBalancers({ networkId }).then(r => {
-                                        setInlineLbs(r.loadbalancers || r.data?.loadbalancers || []);
-                                        setToast({ msg: 'Floating IP attached successfully.', type: 'success' });
-                                    });
+                                    setReloadKey(k => k + 1);
+                                    setToast({ msg: 'Floating IP attached successfully.', type: 'success' });
                                 })
                                 .catch(err => {
                                     setToast({ msg: err.message || 'Failed to attach Floating IP.', type: 'danger' });
@@ -223,7 +239,7 @@
                 React.createElement(
                   "tbody",
                   null,
-                  lbs.map(lb => (
+                  pageLbs.map(lb => (
                             React.createElement(
                               "tr",
                               {key: lb.id},
@@ -310,11 +326,8 @@
                                                             e.preventDefault();
                                                             Api.detachFloatingIp(lb.id, networkId)
                                                                 .then(() => {
-                                                                    // Refresh list in background without global loader
-                                                                    return Api.listLoadBalancers({ networkId }).then(r => {
-                                                                        setInlineLbs(r.loadbalancers || r.data?.loadbalancers || []);
-                                                                        setToast({ msg: 'Floating IP detached successfully.', type: 'success' });
-                                                                    });
+                                                                    setReloadKey(k => k + 1);
+                                                                    setToast({ msg: 'Floating IP detached successfully.', type: 'success' });
                                                                 })
                                                                 .catch(err => {
                                                                     setToast({ msg: err.message || 'Failed to detach Floating IP.', type: 'danger' });
@@ -343,7 +356,7 @@
                               )
                             )
                         )),
-                  lbs.length === 0 && (
+                  pageLbs.length === 0 && (
                             React.createElement(
                               "tr",
                               null,
@@ -355,7 +368,66 @@
                             )
                         )
                 )
-              )
+              ),
+              lbs.length > 0 && (
+                    React.createElement(
+                      "div",
+                      {className: "octavia-paging", style: { display: 'flex', alignItems: 'center', marginTop: '10px', gap: '4px', flexWrap: 'wrap', fontSize: '12px' }},
+                      lbState.loading && React.createElement(
+                     "span",
+                     {className: "text-muted", style: { marginRight: '8px', fontStyle: 'italic' }},
+                     "Loading…"
+                   ),
+                      React.createElement(
+                        "span",
+                        {className: "text-muted", style: { marginRight: '6px' }},
+                        "Page",
+                        currentPage,
+                        " of",
+                        totalPages
+                      ),
+                      currentPage > 1 && (
+                            React.createElement(
+                              "button",
+                              {type: "button", style: { padding: '2px 6px', fontSize: '12px', minWidth: '26px' }, className: "btn btn-default btn-sm", onClick: () => setPage(1), title: "First page"},
+                              React.createElement(
+                                "span",
+                                {className: "glyphicon glyphicon-step-backward"}
+                              )
+                            )
+                        ),
+                      (() => {
+                            let startPage = Math.max(1, currentPage - 2);
+                            let endPage = Math.min(totalPages, startPage + MAX_PAGE_BUTTONS - 1);
+                            if (endPage - startPage + 1 < MAX_PAGE_BUTTONS && endPage === totalPages) startPage = Math.max(1, endPage - MAX_PAGE_BUTTONS + 1);
+                            const pages = [];
+                            for (let i = startPage; i <= endPage; i++) pages.push(i);
+                            return pages.map((p) => (
+                                p === currentPage
+                                    ? React.createElement(
+                                        "span",
+                                        {key: p, style: { padding: '2px 6px', fontSize: '12px', minWidth: '26px', marginRight: '2px', display: 'inline-block', textAlign: 'center', border: '1px solid #ccc', borderRadius: '3px', background: '#f5f5f5' }},
+                                        p
+                                      )
+                                    : React.createElement(
+                                        "button",
+                                        {key: p, type: "button", style: { padding: '2px 6px', fontSize: '12px', minWidth: '26px' }, className: "btn btn-default btn-sm", onClick: () => setPage(p)},
+                                        p
+                                      )
+                            ));
+                        })(),
+                      currentPage < totalPages && (
+                            React.createElement(
+                              "button",
+                              {type: "button", style: { padding: '2px 6px', fontSize: '12px', minWidth: '26px' }, className: "btn btn-default btn-sm", onClick: () => setPage(p => Math.min(totalPages, p + 1)), title: "Next page"},
+                              React.createElement(
+                                "span",
+                                {className: "glyphicon glyphicon-step-forward"}
+                              )
+                            )
+                        )
+                    )
+                )
             )
         );
     };

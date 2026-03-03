@@ -384,4 +384,74 @@ class MorpheusLookupService {
             return [:]
         }
     }
+
+    /**
+     * Resolve network identifier from param (numeric id or name).
+     * Returns network id as Long, or null if not found.
+     */
+    Long resolveNetworkIdByIdOrName(String param, Long accountId) {
+        if (!param?.trim()) return null
+        try {
+            if (param.trim().isNumber()) {
+                def id = Long.parseLong(param.trim())
+                def net = morpheus.async.network.get(id)?.blockingGet()
+                return net ? id : null
+            }
+            def query = new DataQuery().withFilter("name", param.trim())
+            def net = morpheus.async.network.list(query).firstElement().blockingGet()
+            return net?.id
+        } catch (Exception ex) {
+            log.debug("resolveNetworkIdByIdOrName failed for param={}: {}", param, ex.message)
+            return null
+        }
+    }
+
+    /**
+     * Resolve instance identifier from param (numeric id or name).
+     * Scoped by account when searching by name.
+     */
+    Long resolveInstanceIdByIdOrName(String param, Long accountId) {
+        if (!param?.trim()) return null
+        try {
+            if (param.trim().isNumber()) {
+                def id = Long.parseLong(param.trim())
+                def inst = morpheus.async.instance.get(id)?.blockingGet()
+                return inst ? id : null
+            }
+            def query = new DataQuery()
+                .withFilter("account.id", accountId)
+                .withFilter("name", param.trim())
+            def list = morpheus.async.instance.listIdentityProjections(query).toList().blockingGet()
+            def first = list?.find { it?.name == param.trim() } ?: list?.getAt(0)
+            return first?.id
+        } catch (Exception ex) {
+            log.debug("resolveInstanceIdByIdOrName failed for param={}: {}", param, ex.message)
+            return null
+        }
+    }
+
+    /**
+     * Resolve project param to OpenStack tenant name (internalId).
+     * param can be: numeric (resource pool id), or pool name, or OpenStack project name (used as-is for internalId).
+     */
+    String resolveProjectTenantName(String param, Long accountId) {
+        if (!param?.trim()) return null
+        try {
+            if (param.trim().isNumber()) {
+                def poolId = Long.parseLong(param.trim())
+                try {
+                    def pool = morpheus.async.pool.get(poolId)?.blockingGet()
+                    if (pool) return pool.externalId ?: pool.name ?: param.trim()
+                } catch (ignored) {}
+                try {
+                    def pool = morpheus.async.computeZonePool.get(poolId)?.blockingGet()
+                    if (pool) return pool.externalId ?: pool.name ?: param.trim()
+                } catch (ignored) {}
+            }
+            return param.trim()
+        } catch (Exception ex) {
+            log.debug("resolveProjectTenantName failed for param={}: {}", param, ex.message)
+            return param?.trim()
+        }
+    }
 }

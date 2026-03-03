@@ -107,3 +107,40 @@ So: **whenever the request needs listener/pool/monitor IDs and doesn’t send th
 | **Listener / pool / monitor / members** with **any ID missing** (e.g. API/script that doesn’t send IDs, or LB missing that resource) | **Yes** | We need to resolve IDs; GET loadbalancer (and optional GET listeners/pools/pool) is used. |
 
 So we do **not** run GET loadbalancer for every update — only when we’re doing nested updates and the payload doesn’t already contain the required IDs.
+
+---
+
+## 5. How fast is list revalidation (status refresh)?
+
+- **Network tab:** After create or update, the list is polled every **30 seconds** for up to **2 minutes**, so status (e.g. PENDING_CREATE to ACTIVE) updates without reload.
+- **Instance tab:** The list is refetched every **30 seconds** while the tab is open, plus you can click **Refresh** for an immediate refetch.
+- Both tabs always fetch from the **Octavia API** (live), not from the Morpheus DB cache.
+
+---
+
+## 6. Status column (ACTIVE / PENDING_UPDATE / etc.)
+
+The **provisioning_status** shown in the UI is the **load balancer resource’s** own state in Octavia, not an AND of listener + pool + monitor + members. Octavia sets the LB to PENDING_UPDATE when you change listener/pool/monitor/members, then moves it back to ACTIVE when the controller has applied the change. So the column reflects the LB’s overall state; when it’s ACTIVE, Octavia is done applying config.
+
+## 7. Member update debug logs
+
+When you add or remove members, the plugin logs:
+
+- **Step 6 (full path):** `Step 6: GET members pool=..., currentCount=..., payloadCount=...`, then `Step 6: toRemove=..., toAdd=...`, then for each DELETE `Step 6: DELETE member <id> from pool <poolId>` and success/failed, and for each POST `Step 6: POST add member <addr>:<port> to pool <poolId>` and success/failed.
+- **Fast path (pool-only):** `Members fast path: poolId=..., currentCount=..., payloadCount=..., toRemove=..., toAdd=...`, then `Members: DELETE pool ... member ...` and `Members: POST pool ... add member ...` with success/failed.
+
+If member add/remove still fails when the LB is ACTIVE, check those logs to see whether the DELETE or POST is rejected by Octavia and what error is returned.
+
+---
+
+## 8. List pagination (Network and Instance tabs)
+
+The list APIs support **max** and **offset** to reduce load. Backend “Page X of Y” **loadbalancers** and **loadbalancersFromDb** accept **max** and **offset**; response includes **total** when max is used. UI uses server-side pagination (max=4, offset per page).
+
+---
+
+## 9. Why member update (and multi-section update) can feel slow
+
+- **Wait time:** After each listener, pool, or health monitor PUT, Octavia can put the load balancer in **PENDING_UPDATE**. Before we run **member** add/remove (or the next nested update), we call **waitForLbActive**: we poll **GET loadbalancer** every **250 ms** until `provisioning_status` is **ACTIVE** or we hit a **20 second** timeout (tuned for faster feedback). So after changing listener + pool + members in one save, you can have up to **several wait cycles** (e.g. after listener, after pool, before member sync), each up to 20s, plus the actual API calls.
+- **API calls:** Member sync does one **GET** (list members), then one **DELETE** per member to remove, then one **POST** per member to add — all **sequential**. So the delay is a mix of **wait time** (polling for ACTIVE) and **network round-trips** (GET + N DELETEs + M POSTs).
+- **Multiple simultaneous updates including members:** We run listener → (wait ACTIVE) → pool → (wait ACTIVE) → monitor → (wait ACTIVE if needed) → member sync (GET members, then DELETEs, then POSTs). So the more sections you change in one save, the more wait cycles and calls; member changes always come last and only after the LB is ACTIVE, which is why member update in a multi-section save can feel the slowest.

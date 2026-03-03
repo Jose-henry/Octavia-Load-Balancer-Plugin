@@ -79,7 +79,13 @@ window.Octavia = window.Octavia || {};
             },
 
             listLoadBalancers: (ctx) => {
-                return apiFetch(withContext(`${baseUrl}/loadbalancers`, ctx));
+                let url = withContext(`${baseUrl}/loadbalancers`, ctx);
+                if (ctx && (ctx.max != null || ctx.offset != null)) {
+                    const sep = url.includes('?') ? '&' : '?';
+                    if (ctx.max != null) url += `${sep}max=${encodeURIComponent(ctx.max)}`;
+                    if (ctx.offset != null) url += `&offset=${encodeURIComponent(ctx.offset)}`;
+                }
+                return apiFetch(url);
             },
 
             getLoadBalancer: (lbId, ctx) => {
@@ -162,7 +168,7 @@ window.Octavia = window.Octavia || {};
         const [state, set] = React.useState({ loading: true })
         React.useEffect(() => {
             let active = true
-            set({ loading: true })
+            set(prev => ({ ...prev, loading: true }))
             fn().then(data => active && set({ loading: false, data }))
                 .catch(err => active && set({ loading: false, error: err }))
             return () => { active = false }

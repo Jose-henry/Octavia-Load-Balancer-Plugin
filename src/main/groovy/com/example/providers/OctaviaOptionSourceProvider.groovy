@@ -35,7 +35,7 @@ class OctaviaOptionSourceProvider implements OptionSourceProvider {
     List<String> getMethodNames() {
         return [
             'projects', 'subnets', 'instances', 'floatingIpPools',
-            'loadbalancers', 'loadbalancersCreate', 'loadbalancersDelete',
+            'loadbalancers', 'loadbalancersFromDb', 'loadbalancersCreate', 'loadbalancersDelete',
             'loadbalancerDetails', 'loadbalancerUpdate', 'floatingipAttach', 'floatingipDetach'
         ]
     }
