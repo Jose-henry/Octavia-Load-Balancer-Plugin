@@ -288,6 +288,46 @@ class OctaviaPoolService {
         }
     }
 
+    // ─── WithClient (for loadbalancersFromDb expand=octavia only; uses pre-authenticated client) ───
+
+    ServiceResponse<List> listListenersWithClient(OctaviaApiClient client, String lbId) {
+        try {
+            String path = "/v2.0/lbaas/listeners?loadbalancer_id=${lbId}"
+            def resp = client.get(path)
+            return resp.success ? ServiceResponse.success(resp.data?.listeners ?: []) : ServiceResponse.error("List Listeners failed: ${resp.msg}")
+        } catch (Exception e) {
+            return ServiceResponse.error(e.message)
+        }
+    }
+
+    ServiceResponse<List> listPoolsWithClient(OctaviaApiClient client, String lbId) {
+        try {
+            String path = "/v2.0/lbaas/pools?loadbalancer_id=${lbId}"
+            def resp = client.get(path)
+            return resp.success ? ServiceResponse.success(resp.data?.pools ?: []) : ServiceResponse.error("List Pools failed: ${resp.msg}")
+        } catch (Exception e) {
+            return ServiceResponse.error(e.message)
+        }
+    }
+
+    ServiceResponse<List> listMembersWithClient(OctaviaApiClient client, String poolId) {
+        try {
+            def resp = client.get("/v2.0/lbaas/pools/${poolId}/members")
+            return resp.success ? ServiceResponse.success(resp.data?.members ?: []) : ServiceResponse.error("List Members failed: ${resp.msg}")
+        } catch (Exception e) {
+            return ServiceResponse.error(e.message)
+        }
+    }
+
+    ServiceResponse getHealthMonitorWithClient(OctaviaApiClient client, String hmId) {
+        try {
+            def resp = client.get("/v2.0/lbaas/healthmonitors/${hmId}")
+            return resp.success ? ServiceResponse.success(resp.data?.healthmonitor) : ServiceResponse.error("Get HealthMonitor failed: ${resp.msg}")
+        } catch (Exception e) {
+            return ServiceResponse.error(e.message)
+        }
+    }
+
     // ─── Internal ───────────────────────────────────────────────────
 
     private OctaviaApiClient getClient(Cloud cloud, String projectId) {

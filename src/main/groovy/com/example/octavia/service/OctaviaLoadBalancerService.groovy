@@ -207,6 +207,23 @@ class OctaviaLoadBalancerService {
             return ServiceResponse.error("Error getting load balancer: ${e.message}")
         }
     }
+
+    /**
+     * Get a Load Balancer by ID using a pre-authenticated client (e.g. from OctaviaExpandAuthService).
+     * Used only by loadbalancersFromDb expand=octavia route; does not use OctaviaAuthService.
+     */
+    ServiceResponse getWithClient(OctaviaApiClient client, String lbId) {
+        try {
+            ServiceResponse response = client.get("/v2.0/lbaas/loadbalancers/${lbId}")
+            if (response.success) {
+                return ServiceResponse.success(response.data?.loadbalancer)
+            }
+            return ServiceResponse.error(extractOctaviaError(response, "Get Load Balancer failed"))
+        } catch (Exception e) {
+            log.error("Error getting load balancer with client: ${e.message}", e)
+            return ServiceResponse.error("Error getting load balancer: ${e.message}")
+        }
+    }
     
     /**
      * Update a Load Balancer (and optionally its first listener/pool).

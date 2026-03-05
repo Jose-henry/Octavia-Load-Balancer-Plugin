@@ -179,10 +179,13 @@ This endpoint returns load balancers from the **Morpheus database** (synced from
 | **project**   | Resource pool id, pool name, or OpenStack project name (internalId) to filter by. |
 | **max**       | Maximum number of LBs to return (reduces load when many LBs per tenancy). Optional. |
 | **offset**    | Number of LBs to **skip** before returning the next `max` items (pagination). Optional, default 0. Example: with `max=4`, use `offset=0` for page 1, `offset=4` for page 2, `offset=8` for page 3. |
+| **expand**    | Set to `octavia` to enrich each LB with listeners, pools, members, health monitors, floating IP from the Octavia API. **Requires `cloud`** (e.g. `cloud=4`). Uses the **admin** project for Octavia authentication. |
 
 When **max** is used, the response includes **total** (total count before pagination) so clients can build "Page X of Y". **Names** are supported for `network`, `instance`, and `project` (resolved to ids / tenant name where applicable).
 
-**Base URL:** your Morpheus server, e.g. `https://morpheus.example.com`. Path: `/plugin/octavia1234/loadbalancersFromDb`.
+**Base URL:** your Morpheus server, e.g. `https://morpheus.example.com`.
+
+**Path:** `/plugin/octavia1234/loadbalancersFromDb` — use **session cookie** (JSESSIONID) for auth; Bearer token typically returns 302 on plugin routes.
 
 ### Authentication: use Bearer token (recommended)
 
@@ -191,10 +194,7 @@ The **recommended** way to call Morpheus APIs is with a **Bearer token** in the 
 - **Header:** `Authorization: Bearer <your-access-token>`
 - Obtain the token from Morpheus (e.g. **Account** → **API** → create an access token, or use the token returned by the login API).
 
-Plugin routes may be served in one of these ways depending on your Morpheus version and deployment:
-
-- **Under `/api/`** (e.g. `/api/plugin/octavia1234/loadbalancersFromDb`): often uses the same token auth as the REST API — use **Bearer token**.
-- **Under `/plugin/`** (e.g. `/plugin/octavia1234/loadbalancersFromDb`): some setups use the same session as the UI here, so **Bearer** may work if your instance is configured to accept it for plugin routes; otherwise you may get a redirect to login and need to use a session cookie (see below).
+Plugin routes under `/plugin/...` typically use the same session as the UI. Use a **session cookie** (JSESSIONID from the browser after login) for curl; Bearer token often returns 302 to login.
 
 If you get **302 to login** when using Bearer on `/plugin/...`, try the **session cookie** approach below, or ask your Morpheus admin whether plugin endpoints are exposed under a path that accepts API tokens (e.g. `/api/plugin/...`).
 
@@ -202,7 +202,9 @@ If you get **302 to login** when using Bearer on `/plugin/...`, try the **sessio
 
 Many Morpheus setups protect **plugin** routes (`/plugin/...`) with the same **session-based auth** as the web UI. A request with only `Authorization: Bearer <token>` may get **HTTP 302** with `Location: .../login/auth` and no JSON body.
 
-**Session cookie:** If you try the cookie approach, the cookie must be from an **authenticated** session — i.e. copy **JSESSIONID** from the browser **after** you have logged in to Morpheus in that browser. Do **not** use the cookie value from the 302 response body/headers; that is an unauthenticated session and will still redirect to login. Steps:
+**Why you can’t use the JSESSIONID from the 302 response:** When you send a Bearer token to `/plugin/...`, the server responds with 302 and often sends a `Set-Cookie: JSESSIONID=...` in the same response. That cookie is for the **login page** (an unauthenticated session), not for the token holder. Using it on the next request does not authenticate you as the token user, so you still get redirected or 401. You cannot “extract” a valid session from the token this way. To use a token to get a session cookie, the **platform** would need to provide something like “token exchange” (e.g. an endpoint that accepts Bearer, validates it, and sets a session cookie). The plugin cannot create a session from a token without that.
+
+**Session cookie:** Use a cookie from an **authenticated** session — i.e. copy **JSESSIONID** from the browser **after** you have logged in to Morpheus in that browser. Do **not** use the cookie value from the 302 response. Steps:
 
 1. Log in to Morpheus in a browser (e.g. https://console.cloud.mtn.ng).
 2. After login, open DevTools → Application (or Storage) → Cookies → select your Morpheus host.
@@ -210,6 +212,13 @@ Many Morpheus setups protect **plugin** routes (`/plugin/...`) with the same **s
 4. Use that cookie in curl (see examples below).
 
 If plugin routes still return 302 even with an authenticated cookie (e.g. different domain, load balancer, or security policy), API access for plugin endpoints may need to be addressed later (e.g. platform config or proxy to accept Bearer on a dedicated path).
+
+### What the Morpheus Plugin API docs say (accuracy check)
+
+- **ViewModel** has `request` (ServletRequest), `user` (authenticated user), and `object` (model data). Our code uses `model.object?.request` for params; some setups may expose the request as `model.request` directly. See [ViewModel](https://developer.morpheusdata.com/api/com/morpheusdata/views/ViewModel.html).
+- **Bearer in controller:** You can read the token in a plugin controller via `request.getHeader("Authorization")` **only if** the request reaches your controller. In many deployments, requests to `/plugin/...` without a session are redirected (302) **before** the plugin controller is invoked, so you never see the Bearer header.
+- **Automatic token auth:** Some docs suggest plugin routes “automatically validate” Bearer and set `model.authUser` / `model.authAccount`. The official API reference does not clearly document that; our plugin uses `model.user` and `model.user.account`. Whether the platform sets `model.user` from a Bearer token for plugin routes depends on how your Morpheus instance is configured (e.g. whether `/plugin` or `/api/plugin` is behind the same auth filter as the REST API).
+- **Summary:** To use Bearer with a plugin endpoint, the request must either (1) hit a path that your Morpheus exposes with API token auth (e.g. `/api/plugin/...`), or (2) reach the controller so the plugin can read the header and validate the token itself (if the platform provides a way to validate tokens). This plugin registers an API-style path and uses `model.user` when present; if your deployment sends Bearer to a path that the platform accepts, `model.user` may be populated.
 
 ### Example: all LBs (no params)
 
@@ -285,6 +294,33 @@ curl -k -s -X GET \
   "$MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?cloud=4&project=MTNNG_MASTER_TENANT" | jq .
 ```
 
+### expand=octavia (requires cloud; uses admin project for auth)
+
+Adding `expand=octavia` enriches each load balancer with listeners, pools, members, health monitors, and floating IP from the Octavia API. You **must** pass the `cloud` query parameter (e.g. `cloud=4`) so the API has a single cloud context; authentication uses the **admin** project for that cloud, so the cloud must have OpenStack/Octavia credentials configured in Morpheus (username/password or service account). If you omit `cloud`, the response is `{ "success": false, "error": "expand=octavia requires the cloud query parameter (e.g. cloud=4). Authentication uses the admin project for that cloud." }`. If Octavia auth fails, the endpoint still returns the DB list and each item may include `expand_error` with the failure message.
+
+**Curl example (session cookie; replace cloud id and COOKIE):**
+
+**Bash (Linux/macOS):**
+```bash
+curl -k -s -X GET \
+  -H "Cookie: JSESSIONID=your-jsessionid-value" \
+  -H "Accept: application/json" \
+  "$MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?cloud=4&expand=octavia" | jq .
+```
+
+**Windows CMD:**
+```cmd
+set MORPHEUS_URL=https://console.cloud.mtn.ng
+set COOKIE=JSESSIONID=your-jsessionid-value
+
+curl -k -s -X GET -H "Cookie: %COOKIE%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancersFromDb?cloud=4&expand=octavia"
+```
+
+Optional: add `max` and `offset` for pagination, or `accountid` for tenant filter:
+```cmd
+curl -k -s -X GET -H "Cookie: %COOKIE%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancersFromDb?cloud=4&expand=octavia&max=10&offset=0"
+```
+
 ### Example: with session cookie (use when Bearer returns 302)
 
 **Bash (Linux/macOS):**
@@ -326,9 +362,57 @@ Use **Bearer token** when your Morpheus accepts it for plugin routes. If you get
 **Set variables (edit values):**
 ```cmd
 set MORPHEUS_URL=https://console.cloud.mtn.ng
-set API_TOKEN=your-morpheus-access-token
+set API_TOKEN=1f93a7da-0c58-4eec-825f-a96731a8a7cd
 set NETWORK_ID=274
-set COOKIE=JSESSIONID=your-jsessionid-value
+set INSTANCE_ID=1749
+set LB_ID=your-loadbalancer-uuid
+set COOKIE=JSESSIONID=MzAwMjJiYzctODI5Yy00YWJkLWE0ZGYtNDY3ZDIzMTA4NWM3
+```
+
+**Every route with Bearer token (one curl per route):**
+
+```cmd
+REM Ping (health check)
+curl -k -s -X GET -H "Authorization: Bearer %API_TOKEN%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/ping"
+
+REM List LBs from Octavia (needs networkId or instanceId)
+curl -k -s -X GET -H "Authorization: Bearer %API_TOKEN%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancers?networkId=%NETWORK_ID%"
+curl -k -s -X GET -H "Authorization: Bearer %API_TOKEN%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancers?instanceId=%INSTANCE_ID%"
+
+REM List LBs from DB (use session cookie; Bearer usually 302 on plugin routes)
+curl -k -s -X GET -H "Cookie: %COOKIE%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancersFromDb"
+curl -k -s -X GET -H "Cookie: %COOKIE%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancersFromDb?max=4&offset=0"
+curl -k -s -X GET -H "Cookie: %COOKIE%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancersFromDb?cloud=4"
+curl -k -s -X GET -H "Cookie: %COOKIE%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancersFromDb?accountid=5"
+curl -k -s -X GET -H "Cookie: %COOKIE%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancersFromDb?cloud=4&expand=octavia"
+
+REM LB details (needs id + networkId or instanceId)
+curl -k -s -X GET -H "Authorization: Bearer %API_TOKEN%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancerDetails?id=%LB_ID%&networkId=%NETWORK_ID%"
+
+REM Options (for dropdowns / context)
+curl -k -s -X GET -H "Authorization: Bearer %API_TOKEN%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/optionProjects?networkId=%NETWORK_ID%"
+curl -k -s -X GET -H "Authorization: Bearer %API_TOKEN%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/optionSubnets?networkId=%NETWORK_ID%"
+curl -k -s -X GET -H "Authorization: Bearer %API_TOKEN%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/optionInstances?networkId=%NETWORK_ID%"
+curl -k -s -X GET -H "Authorization: Bearer %API_TOKEN%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/optionFloatingIpPools?networkId=%NETWORK_ID%"
+```
+
+POST routes (body required; use `-d` and `Content-Type: application/json`):
+
+```cmd
+REM Create LB (POST body required)
+curl -k -s -X POST -H "Authorization: Bearer %API_TOKEN%" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"name\":\"my-lb\",\"networkId\":%NETWORK_ID%}" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancersCreate"
+
+REM Update LB (POST body + optional listenerId, poolId, healthmonitorId in URL)
+curl -k -s -X POST -H "Authorization: Bearer %API_TOKEN%" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"id\":\"%LB_ID%\",\"name\":\"updated-name\",\"networkId\":%NETWORK_ID%}" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancerUpdate"
+
+REM Delete LB
+curl -k -s -X POST -H "Authorization: Bearer %API_TOKEN%" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"lbId\":\"%LB_ID%\",\"networkId\":%NETWORK_ID%}" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancersDelete"
+
+REM Attach floating IP
+curl -k -s -X POST -H "Authorization: Bearer %API_TOKEN%" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"lbId\":\"%LB_ID%\",\"floatingIpPoolId\":\"pool-id\",\"networkId\":%NETWORK_ID%}" "%MORPHEUS_URL%/plugin/octavia1234/floatingipAttach"
+
+REM Detach floating IP
+curl -k -s -X POST -H "Authorization: Bearer %API_TOKEN%" -H "Content-Type: application/json" -H "Accept: application/json" -d "{\"lbId\":\"%LB_ID%\",\"networkId\":%NETWORK_ID%}" "%MORPHEUS_URL%/plugin/octavia1234/floatingipDetach"
 ```
 
 **List LBs from plugin (Octavia list) — requires network or instance context:**
@@ -341,14 +425,14 @@ curl -k -s -X GET -H "Authorization: Bearer %API_TOKEN%" -H "Accept: application
 curl -k -s -X GET -H "Authorization: Bearer %API_TOKEN%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancers?networkId=%NETWORK_ID%&max=4&offset=0"
 ```
 
-**List LBs from DB (loadbalancersFromDb) — no params:**
+**List LBs from DB (loadbalancersFromDb) — use session cookie:**
 ```cmd
-curl -k -s -X GET -H "Authorization: Bearer %API_TOKEN%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancersFromDb"
+curl -k -s -X GET -H "Cookie: %COOKIE%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancersFromDb"
 ```
 
 **List LBs from DB with pagination (max and offset):**
 ```cmd
-curl -k -s -X GET -H "Authorization: Bearer %API_TOKEN%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancersFromDb?max=4&offset=0"
+curl -k -s -X GET -H "Cookie: %COOKIE%" -H "Accept: application/json" "%MORPHEUS_URL%/plugin/octavia1234/loadbalancersFromDb?max=4&offset=0"
 ```
 
 **List LBs from DB filtered by cloud:**
@@ -372,3 +456,148 @@ curl -k -s -X GET -H "Cookie: %COOKIE%" -H "Accept: application/json" "%MORPHEUS
 ```
 
 Remove `-s` from curl if you want to see progress; append `| more` or redirect to a file if the response is large.
+
+---
+
+## 10. PowerShell — loadbalancersFromDb examples
+
+Set variables first (session cookie required; Bearer often 302 on plugin routes):
+
+```powershell
+$env:MORPHEUS_URL = "https://console.cloud.mtn.ng"
+$env:COOKIE        = "JSESSIONID=your-jsessionid-value"
+```
+
+**All LBs (master: all tenancies; regular: own tenancy only)**
+
+```powershell
+curl -k -s -X GET `
+  -H "Cookie: $env:COOKIE" `
+  -H "Accept: application/json" `
+  "$env:MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb" |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10
+```
+
+**Filter by cloud (e.g. cloud id 4)**
+
+```powershell
+curl -k -s -X GET `
+  -H "Cookie: $env:COOKIE" `
+  -H "Accept: application/json" `
+  "$env:MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?cloud=4" |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10
+```
+
+**Filter by account/tenant (accountid). Master tenant can use any id; regular tenant only sees own, or gets access denied.**
+
+```powershell
+# LBs for Morpheus account/tenant id 1
+curl -k -s -X GET `
+  -H "Cookie: $env:COOKIE" `
+  -H "Accept: application/json" `
+  "$env:MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?accountid=1" |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10
+
+# LBs for account id 5
+curl -k -s -X GET `
+  -H "Cookie: $env:COOKIE" `
+  -H "Accept: application/json" `
+  "$env:MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?accountid=5" |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10
+```
+
+**Expand with Octavia (listeners, pools, members, healthmonitors, floating_ip). Requires cloud.**
+
+```powershell
+curl -k -s -X GET `
+  -H "Cookie: $env:COOKIE" `
+  -H "Accept: application/json" `
+  "$env:MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?cloud=4&expand=octavia" |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10
+```
+
+**Cloud + accountid**
+
+```powershell
+curl -k -s -X GET `
+  -H "Cookie: $env:COOKIE" `
+  -H "Accept: application/json" `
+  "$env:MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?cloud=4&accountid=1" |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10
+```
+
+**Cloud + expand + accountid**
+
+```powershell
+curl -k -s -X GET `
+  -H "Cookie: $env:COOKIE" `
+  -H "Accept: application/json" `
+  "$env:MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?cloud=4&expand=octavia&accountid=1" |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10
+```
+
+**Filter by network (id or name)**
+
+```powershell
+# By network id
+curl -k -s -X GET `
+  -H "Cookie: $env:COOKIE" `
+  -H "Accept: application/json" `
+  "$env:MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?network=274" |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10
+
+# By network name (URL-encode spaces if needed)
+curl -k -s -X GET `
+  -H "Cookie: $env:COOKIE" `
+  -H "Accept: application/json" `
+  "$env:MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?network=My%20VLAN" |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10
+```
+
+**Filter by instance (id or name)**
+
+```powershell
+curl -k -s -X GET `
+  -H "Cookie: $env:COOKIE" `
+  -H "Accept: application/json" `
+  "$env:MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?instance=1757" |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10
+```
+
+**Filter by project (resource pool id, pool name, or OpenStack project name)**
+
+```powershell
+curl -k -s -X GET `
+  -H "Cookie: $env:COOKIE" `
+  -H "Accept: application/json" `
+  "$env:MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?project=5" |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10
+```
+
+**Pagination (max and offset). Response includes total.**
+
+```powershell
+# First page (4 items)
+curl -k -s -X GET `
+  -H "Cookie: $env:COOKIE" `
+  -H "Accept: application/json" `
+  "$env:MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?max=4&offset=0" |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10
+
+# Second page
+curl -k -s -X GET `
+  -H "Cookie: $env:COOKIE" `
+  -H "Accept: application/json" `
+  "$env:MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?max=4&offset=4" |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10
+```
+
+**Combine: cloud + expand + accountid + pagination**
+
+```powershell
+curl -k -s -X GET `
+  -H "Cookie: $env:COOKIE" `
+  -H "Accept: application/json" `
+  "$env:MORPHEUS_URL/plugin/octavia1234/loadbalancersFromDb?cloud=4&expand=octavia&accountid=1&max=10&offset=0" |
+  ConvertFrom-Json | ConvertTo-Json -Depth 10
+```

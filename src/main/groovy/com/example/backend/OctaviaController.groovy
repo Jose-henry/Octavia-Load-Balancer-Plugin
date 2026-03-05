@@ -15,6 +15,9 @@ import com.example.octavia.service.OctaviaPoolService
 import com.example.octavia.service.OctaviaNetworkingService
 import com.example.octavia.service.MockOctaviaService
 import com.example.octavia.service.OctaviaAuthService
+import com.example.octavia.service.OctaviaExpandAuthService
+import com.example.octavia.client.OctaviaApiClient
+import com.morpheusdata.core.util.HttpApiClient
 
 /**
  * Production Octavia controller — integrates real Octavia API services
@@ -156,6 +159,25 @@ class OctaviaController implements PluginController {
             log.debug("Could not parse request body: {}", ex.message)
         }
         return [:]
+    }
+
+    /** Get HTTP request from ViewModel (platform may expose as model.request or model.object.request) */
+    private def getRequest(ViewModel<Map> model) {
+        if (model?.request != null) return model.request
+        return model?.object?.request
+    }
+
+    /** Get Authorization Bearer token from request if present (for docs: controller can read it when request reaches us) */
+    private String getBearerToken(ViewModel<Map> model) {
+        def req = getRequest(model)
+        if (req == null) return null
+        try {
+            def auth = req.getHeader?.("Authorization")
+            if (auth != null && auth.toString().trim().toLowerCase().startsWith("bearer ")) {
+                return auth.toString().trim().substring(7).trim()
+            }
+        } catch (Exception e) { log.debug("getBearerToken: {}", e.message) }
+        return null
     }
 
     /** Get query parameter from ViewModel */
@@ -449,6 +471,11 @@ class OctaviaController implements PluginController {
             def requestedAccountId = accountIdParam?.trim()?.isNumber() ? Long.parseLong(accountIdParam.trim()) : null
 
             if (currentAccountId == null) {
+                def bearerToken = getBearerToken(model)
+                if (bearerToken != null) {
+                    log.warn("loadbalancersFromDb: Bearer token present but no user/account (platform did not authenticate token for this route)")
+                    return JsonResponse.of([success: false, loadbalancers: [], error: 'Unauthorized: Bearer token was sent but this route did not receive an authenticated user. Try /api/plugin/octavia1234/loadbalancersFromDb if your Morpheus exposes plugin routes under API auth, or use session cookie for /plugin/...'])
+                }
                 log.warn("loadbalancersFromDb: no account context (token must have account)")
                 return JsonResponse.of([success: false, loadbalancers: [], error: 'Account context required for tenant scoping'])
             }
@@ -513,10 +540,11 @@ class OctaviaController implements PluginController {
 
             def maxParam = getParam(model, 'max')
             def offsetParam = getParam(model, 'offset')
+            long maxVal = 0L
+            long offsetVal = 0L
             if (maxParam?.trim()?.isNumber()) {
                 try {
-                    long maxVal = Math.max(1L, Long.parseLong(maxParam.trim()))
-                    long offsetVal = 0L
+                    maxVal = Math.max(1L, Long.parseLong(maxParam.trim()))
                     if (offsetParam?.trim()?.isNumber()) offsetVal = Math.max(0L, Long.parseLong(offsetParam.trim()))
                     query = query.withMax(maxVal).withOffset(offsetVal)
                 } catch (Exception e) {
@@ -524,19 +552,107 @@ class OctaviaController implements PluginController {
                 }
             }
 
+            // IdentityProjection only has id (and maybe externalId); load full entities for name, status, cloud, owner, etc.
             def projections = morpheusContext.async.loadBalancer.listIdentityProjections(query).toList().blockingGet() ?: []
-            def list = projections.collect { p ->
-                [
-                    id                  : p.id,
-                    name                : p.name,
-                    externalId          : p.externalId,
-                    vip_address         : p.internalIp,
-                    internalIp          : p.internalIp,
-                    provisioning_status : mapMorpheusStatusToOctavia(p.status ?: ''),
-                    status              : p.status,
-                    description         : p.description,
-                    internalId          : p.internalId
-                ]
+            def list = []
+            def fullLbs = []
+            if (projections) {
+                def ids = projections.collect { it.id }
+                fullLbs = morpheusContext.async.loadBalancer.listById(ids).toList().blockingGet() ?: []
+                list = fullLbs.collect { lb ->
+                    [
+                        id                  : lb.id,
+                        name                : lb.name,
+                        externalId          : lb.externalId,
+                        vip_address         : lb.internalIp,
+                        internalIp          : lb.internalIp,
+                        provisioning_status : mapMorpheusStatusToOctavia(lb.status ?: ''),
+                        status              : lb.status,
+                        description         : lb.description,
+                        internalId          : lb.internalId,
+                        cloudId             : lb.cloud?.id,
+                        cloudName           : lb.cloud?.name,
+                        ownerId             : lb.owner?.id,
+                        ownerName           : lb.owner?.name,
+                        type                : lb.type ? [id: lb.type.id, name: lb.type.name] : null
+                    ]
+                }
+            }
+
+            // If max/offset were requested, enforce in-memory slice in case the query did not apply pagination (e.g. listIdentityProjections ignores it)
+            if (maxVal > 0L && list) {
+                int o = (int) Math.min(offsetVal, list.size())
+                int m = (int) maxVal
+                list = list.drop(o).take(m)
+                fullLbs = fullLbs.drop(o).take(m)
+            }
+
+            // Optional: expand=octavia enriches each LB with listeners, pools, members, healthmonitors, floating IP from Octavia API.
+            // Uses OctaviaExpandAuthService only (cloud by ID from query param, admin project). Does not use OctaviaAuthService.
+            def expandParam = getParam(model, 'expand')
+            if (expandParam?.toLowerCase() == 'octavia' && fullLbs && !isMockMode()) {
+                def cloudParamForExpand = getParam(model, 'cloud')
+                if (!cloudParamForExpand?.trim()?.isNumber()) {
+                    return JsonResponse.of([success: false, loadbalancers: list, error: 'expand=octavia requires the cloud query parameter (e.g. cloud=4). Authentication uses the admin project for that cloud.'])
+                }
+                def cloudIdLong = Long.parseLong(cloudParamForExpand.trim())
+                def expandAuth = new OctaviaExpandAuthService(morpheusContext).getAuthToken(cloudIdLong)
+                if (!expandAuth?.success) {
+                    def authError = expandAuth?.error ?: 'Expand auth failed'
+                    fullLbs.eachWithIndex { lb, idx -> list[idx].expand_error = authError }
+                } else {
+                    def httpClient = new HttpApiClient()
+                    def octaviaClient = new OctaviaApiClient(httpClient, expandAuth.loadBalancerApi as String, expandAuth.token as String)
+                    def neutronClient = new OctaviaApiClient(httpClient, expandAuth.networkApi as String, expandAuth.token as String)
+                    fullLbs.eachWithIndex { lb, idx ->
+                        def item = list[idx]
+                        if (!lb.externalId) return
+                        try {
+                            def lbResp = lbService.getWithClient(octaviaClient, lb.externalId)
+                            if (!lbResp?.success) {
+                                item.expand_error = lbResp?.msg ?: lbResp?.error ?: 'Octavia request failed'
+                                return
+                            }
+                            if (lbResp.data) {
+                                def lbData = lbResp.data
+                                item.vip_subnet_id = lbData.vip_subnet_id
+                                item.vip_port_id = lbData.vip_port_id
+                                item.provisioning_status = lbData.provisioning_status
+                                item.operating_status = lbData.operating_status
+                                def listenersResp = poolService.listListenersWithClient(octaviaClient, lb.externalId)
+                                if (listenersResp.success) item.listeners = listenersResp.data ?: []
+                                def poolsResp = poolService.listPoolsWithClient(octaviaClient, lb.externalId)
+                                if (poolsResp.success) {
+                                    def pools = poolsResp.data ?: []
+                                    pools.each { p ->
+                                        def poolId = p.id
+                                        if (poolId) {
+                                            def memResp = poolService.listMembersWithClient(octaviaClient, poolId)
+                                            if (memResp.success) p.members = memResp.data ?: []
+                                            if (p.healthmonitor_id) {
+                                                def hmResp = poolService.getHealthMonitorWithClient(octaviaClient, p.healthmonitor_id as String)
+                                                if (hmResp.success) p.healthmonitor = hmResp.data
+                                            }
+                                        }
+                                    }
+                                    item.pools = pools
+                                }
+                                if (lbData.vip_port_id) {
+                                    try {
+                                        def fipsResp = networkingService.listFloatingIpsWithClient(neutronClient, [:])
+                                        if (fipsResp.success && fipsResp.data) {
+                                            def fip = fipsResp.data.find { it.port_id == lbData.vip_port_id }
+                                            if (fip) item.floating_ip = [id: fip.id, floating_ip_address: fip.floating_ip_address, port_id: fip.port_id]
+                                        }
+                                    } catch (Exception fipEx) { log.debug("loadbalancersFromDb expand: floating IP lookup failed for LB {}: {}", lb.externalId, fipEx.message) }
+                                }
+                            }
+                        } catch (Exception ex) {
+                            log.warn("loadbalancersFromDb expand: failed to enrich LB {}: {}", lb.externalId, ex.message)
+                            item.expand_error = ex.message
+                        }
+                    }
+                }
             }
 
             def result = [success: true, loadbalancers: list]

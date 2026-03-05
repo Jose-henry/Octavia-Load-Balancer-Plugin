@@ -17,6 +17,25 @@ class OctaviaNetworkingService {
     }
 
     /**
+     * List Floating IPs using a pre-authenticated client (e.g. from OctaviaExpandAuthService).
+     * Used only by loadbalancersFromDb expand=octavia route.
+     */
+    ServiceResponse<List<Map>> listFloatingIpsWithClient(OctaviaApiClient client, Map filters = [:]) {
+        try {
+            String query = filters.collect { k, v -> "${k}=${v}" }.join('&')
+            String path = "/v2.0/floatingips" + (query ? "?${query}" : "")
+            ServiceResponse response = client.get(path)
+            if (response.success) {
+                return ServiceResponse.success(response.data?.floatingips ?: [])
+            }
+            return ServiceResponse.error("List Floating IPs failed: ${response.msg ?: response.error}")
+        } catch (Exception e) {
+            log.error("Error listing floating IPs with client: ${e.message}", e)
+            return ServiceResponse.error("Error listing floating IPs: ${e.message}")
+        }
+    }
+
+    /**
      * List Floating IPs.
      * @param filters - e.g. [status: 'DOWN', floating_network_id: '...']
      */
